@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <Type Name="descript::dsArray&lt;*&gt;">
+        <DisplayString Condition="first_ == sentinel_">empty</DisplayString>
+        <DisplayString>{{ size={sentinel_ - first_} }}</DisplayString>
+        <Expand>
+            <Item Name="[size]" ExcludeView="simple">sentinel_ - first_</Item>
+            <Item Name="[capacity]" ExcludeView="simple">last_ - first_</Item>
+            <ArrayItems>
+                <Size>sentinel_ - first_</Size>
+                <ValuePointer>first_</ValuePointer>
+            </ArrayItems>
+        </Expand>
+    </Type>
+
+    <Type Name="descript::dsKey&lt;*, *&gt;">
+        <DisplayString>{"$T1",sb}({value_})</DisplayString>
+        <Expand>
+            <Item Name="[value]">value_</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="descript::dsIndex&lt;*&gt;">
+        <DisplayString Condition="value_ == invalid_value">invalid</DisplayString>
+        <DisplayString>{"$T1",sb}({value_})</DisplayString>
+        <Expand>
+            <Item Name="[value]">value_</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="descript::dsString">
+        <DisplayString>{first_}</DisplayString>
+    </Type>
+
+    <Type Name="descript::dsRelativeObject&lt;*&gt;">
+        <SmartPointer Usage="Minimal">($T1*)((uintptr_t)this + offset)</SmartPointer>
+        <DisplayString Condition="offset == 0">nullptr</DisplayString>
+        <DisplayString Condition="offset != 0">{*($T1*)((uintptr_t)this + offset)}</DisplayString>
+        <Expand>
+            <ExpandedItem Condition="offset != 0">*($T1*)((uintptr_t)this + offset)</ExpandedItem>
+            <Item Name="[offset]" ExcludeView="simple">offset</Item>
+            <Item Condition="offset != 0" Name="[ptr]">($T1*)((uintptr_t)this + offset)</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="descript::dsRelativeArray&lt;*, *&gt;">
+        <DisplayString Condition="count == 0">empty</DisplayString>
+        <DisplayString>{{ size={count} }}</DisplayString>
+        <Expand>
+            <Item Name="[size]" ExcludeView="simple">count</Item>
+            <Item Name="[offset]" ExcludeView="simple">base.offset</Item>
+            <ArrayItems>
+                <Size>count</Size>
+                <ValuePointer>($T1*)((uintptr_t)this + base.offset)</ValuePointer>
+            </ArrayItems>
+        </Expand>
+    </Type>
+
+    <Type Name="descript::dsRelativeBitArray&lt;*&gt;">
+        <DisplayString Condition="count == 0">empty</DisplayString>
+        <DisplayString>{{ size={count} }}</DisplayString>
+        <Expand>
+            <Item Name="[size]" ExcludeView="simple">count</Item>
+            <Item Name="[offset]" ExcludeView="simple">base.offset</Item>
+            <IndexListItems>
+                <Size>count</Size>
+                <ValueNode>((uint8_t*)((uintptr_t)this + base.offset))[$i / 8] &amp; (1 &lt;&lt; ($i % 8)) ? 1 : 0</ValueNode>
+            </IndexListItems>
+        </Expand>
+    </Type>
+</AutoVisualizer>

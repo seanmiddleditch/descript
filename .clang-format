@@ -1,0 +1,22 @@
+---
+BasedOnStyle: Microsoft
+IndentWidth: 4
+ColumnLimit: 140
+---
+Language: Cpp
+
+AccessModifierOffset: -4
+AlignAfterOpenBracket: DontAlign
+AlignEscapedNewlines: Left
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortEnumsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+AttributeMacros: ['DS_API']
+BraceWrapping:
+  AfterNamespace: false
+NamespaceIndentation: All
+PointerAlignment: Left

@@ -1,0 +1,9 @@
+* text=auto
+
+*.c text
+*.cpp text
+*.h text
+*.hh text
+*.natvis text
+*.txt text
+*.yml text
