@@ -4,6 +4,7 @@ target_sources(descript_tests PRIVATE
     "leak_alloc.hh"    
     "test_compiler.cpp"
     "test_expression.cpp"
+    "test_expression.hh"
     "test_runtime.cpp"
     "test_uuid.cpp"
 )

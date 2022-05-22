@@ -17,7 +17,13 @@ namespace {
 } // namespace
 
 namespace descript {
-    void dsExpressionCompiler::reset() { tokens_.clear(); }
+    void dsExpressionCompiler::reset()
+    {
+        tokens_.clear();
+        ast_.clear();
+        expression_.reset();
+        nextToken_ = dsInvalidIndex;
+    }
 
     bool dsExpressionCompiler::compile(char const* expression, char const* expressionEnd)
     {
@@ -268,6 +274,12 @@ namespace descript {
         AstIndex const callIndex{ast_.size()};
         ast_.pushBack(Ast{.type = AstType::Call, .primaryTokenIndex = nextToken_, .data = {.call = {.targetIndex = targetIndex}}});
 
+        if (tokens_.contains(nextToken_) && tokens_[nextToken_].type == TokenType::RParen)
+        {
+            ++nextToken_;
+            return callIndex;
+        }
+
         AstIndex prevArgIndex = dsInvalidIndex;
         while (tokens_.contains(nextToken_))
         {
@@ -280,9 +292,13 @@ namespace descript {
             prevArgIndex = argIndex;
 
             // we only continue looping if we get a comma
-            if (!tokens_.contains(nextToken_) || tokens_[nextToken_].type != TokenType::Comma)
-                break;
-            ++nextToken_;
+            if (tokens_.contains(nextToken_) && tokens_[nextToken_].type == TokenType::Comma)
+            {
+                ++nextToken_;
+                continue;
+            }
+
+            break;
         }
 
         // expect a closing rparen

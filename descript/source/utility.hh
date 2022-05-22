@@ -67,8 +67,18 @@ namespace descript {
     template <typename T>
     struct dsSpan
     {
+        dsSpan() noexcept = default;
+        template <size_t N>
+        dsSpan(T (&arr)[N]) noexcept : items(arr), count(N)
+        {
+        }
+        dsSpan(T* start, T* end) noexcept : items(start), count(end - start) {}
+
         T* items = nullptr;
         uint32_t count = 0;
+
+        T* begin() const noexcept { return items; }
+        T* end() const noexcept { return items + count; }
     };
 
     template <typename ContainerT>

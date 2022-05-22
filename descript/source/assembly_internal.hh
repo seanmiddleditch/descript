@@ -115,6 +115,7 @@ namespace descript {
 
     struct dsAssemblyFunctionImpl
     {
+        dsFunctionId functionId = dsInvalidFunctionId;
         dsFunction function = nullptr;
         void* userData = nullptr;
     };

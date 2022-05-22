@@ -65,7 +65,7 @@ namespace descript {
             RParen,
             Comma,
             LiteralInt,
-            Identifier
+            Identifier,
         };
 
         enum class AstType : uint8_t
