@@ -175,7 +175,7 @@ namespace descript {
         if (sentinel_ == last_)
         {
             uint32_t const cap = last_ - first_;
-            reallocate(cap < 16 ? 16 : (cap + cap >> 2));
+            reallocate(cap < 16 ? 16 : (cap + (cap >> 2)));
         }
 
         return *new (sentinel_++) Value(static_cast<Value&&>(value));
