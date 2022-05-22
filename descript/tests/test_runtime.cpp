@@ -75,9 +75,11 @@ namespace {
     private:
         void Update(dsContext& ctx)
         {
-            double const value = ctx.readSlotOr(conditionSlot, dsValue{0.0}).as<double>();
-            ctx.setPlugPower(truePlug, value != 0.0);
-            ctx.setPlugPower(falsePlug, value == 0.0);
+            dsValue value;
+            if (!ctx.readSlot(conditionSlot, value))
+                value = dsValue{false};
+            ctx.setPlugPower(truePlug, value.as<bool>());
+            ctx.setPlugPower(falsePlug, !value.as<bool>());
         }
     };
 
@@ -92,19 +94,25 @@ namespace {
 
         void onActivate(dsContext& ctx) override
         {
-            double const value = ctx.readSlotOr(counterSlot, dsValue{0.0}).as<double>();
-            increment_ = ctx.readSlotOr(incrementSlot, dsValue{0.0}).as<double>();
-            ctx.writeSlot(counterSlot, dsValue{value + increment_});
+            dsValue value;
+            if (!ctx.readSlot(counterSlot, value))
+                value = dsValue{0.0};
+            if (!ctx.readSlot(incrementSlot, increment_))
+                increment_ = dsValue{0.0};
+
+            ctx.writeSlot(counterSlot, dsValue{value.as<double>() + increment_.as<double>()});
         }
 
         void onDeactivate(dsContext& ctx) override
         {
-            double const value = ctx.readSlotOr(counterSlot, dsValue{0.0}).as<double>();
-            ctx.writeSlot(counterSlot, dsValue{value - increment_});
+            dsValue value;
+            if (!ctx.readSlot(counterSlot, value))
+                value = dsValue{0.0};
+            ctx.writeSlot(counterSlot, dsValue{value.as<double>() - increment_.as<double>()});
         }
 
     private:
-        double increment_ = 0.0;
+        dsValue increment_;
     };
 
     class CanaryState final : public Node<CanaryState>
@@ -178,8 +186,11 @@ namespace {
         {.typeId = ToggleState::typeId, .kind = ToggleState::kind},
     };
 
-    static constexpr dsFunctionCompileMeta functions[] = {{.name = "series", .functionId = dsFunctionId{0}},
-        {.name = "readFlag", .functionId = dsFunctionId{1}}};
+    static constexpr dsFunctionCompileMeta functions[] = {
+        {.name = "series", .functionId = dsFunctionId{0}},
+        {.name = "readFlag", .functionId = dsFunctionId{1}},
+        {.name = "readFlagNum", .functionId = dsFunctionId{2}},
+    };
 
     class TestCompilerHost final : public dsCompilerHost
     {
@@ -296,6 +307,12 @@ namespace {
     static dsValue readFlag(dsFunctionContext& ctx, void* userData)
     {
         ctx.listen(flagEmitterId);
+        return dsValue{flagValue};
+    }
+
+    static dsValue readFlagNum(dsFunctionContext& ctx, void* userData)
+    {
+        ctx.listen(flagEmitterId);
         return dsValue{flagValue ? 1.0 : 0.0};
     }
 } // namespace
@@ -318,6 +335,7 @@ TEST_CASE("Graph Compiler", "[runtime]")
 
     runtimeHost.registerFunction(dsFunctionId{0}, series);
     runtimeHost.registerFunction(dsFunctionId{1}, readFlag);
+    runtimeHost.registerFunction(dsFunctionId{2}, readFlagNum);
 
     TestCompilerHost compilerHost(alloc);
     dsGraphCompiler* compiler = dsCreateGraphCompiler(alloc, compilerHost);
@@ -389,7 +407,7 @@ TEST_CASE("Graph Compiler", "[runtime]")
 
     compiler->bindSlotExpression(conditionNodeId, ConditionState::conditionSlot, "readFlag()");
     compiler->bindOutputSlotVariable(counterNodeId, CounterState::counterSlot, dsName{"Count"});
-    compiler->bindSlotExpression(counterNodeId, CounterState::incrementSlot, "series(2, 1, 2) + readFlag()");
+    compiler->bindSlotExpression(counterNodeId, CounterState::incrementSlot, "series(2, 1, 2) + readFlagNum()");
     compiler->bindSlotExpression(setResultNodeId, dsInputSlotIndex{0}, "Count * 2");
     compiler->bindOutputSlotVariable(setResultNodeId, dsOutputSlotIndex{0}, dsName{"Result"});
     compiler->bindSlotExpression(setIncrementNodeId, dsInputSlotIndex{0}, "Increment + 1");
@@ -418,7 +436,10 @@ TEST_CASE("Graph Compiler", "[runtime]")
     dsAssembly* assembly = dsLoadAssembly(alloc, runtimeHost, blob.data(), blob.size());
     REQUIRE(assembly != nullptr);
 
-    dsParam const params[] = {{.name = dsName{"Count"}, .value = 0.0}};
+    dsParam const params[] = {
+        {.name = dsName{"Count"}, .value = 0.0},
+        {.name = dsName{"Increment"}, .value = 0.0},
+    };
 
     flagValue = true;
     runtime->notifyChange(flagEmitterId);

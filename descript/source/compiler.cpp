@@ -1053,7 +1053,7 @@ namespace descript {
     {
         ExpressionCompilerHost host(*this);
         ExpressionBuilder builder(allocator_, *this);
-        dsExpressionCompiler compiler(allocator_, host, builder);
+        dsExpressionCompiler compiler(allocator_, host);
 
         for (InputBinding const& binding : inputBindings_)
         {
@@ -1089,9 +1089,12 @@ namespace descript {
                 if (!compiler.compile(expression.expression.cStr()))
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
 
+                if (!compiler.optimize())
+                    error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
+
                 expression.byteCodeStart = dsAssemblyByteCodeIndex{byteCode_.size()};
 
-                if (!compiler.build())
+                if (!compiler.build(builder))
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
 
                 expression.byteCodeCount = byteCode_.size() - expression.byteCodeStart.value();

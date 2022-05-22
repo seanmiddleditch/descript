@@ -34,7 +34,11 @@ TEST_CASE("Virtual Machine", "[vm]")
     LeakTestAllocator alloc;
     ExpressionTester tester(alloc, variables, functions);
 
-    SECTION("Constants") {
+    SECTION("Constants")
+    {
+        CHECK(tester.compile("True", dsValue{true}));
+        CHECK(tester.compile("False", dsValue{false}));
+        CHECK(tester.compile("Nil", dsValue{nullptr}));
         CHECK(tester.compile("0", 0.0));
         CHECK(tester.compile("10", 10.0));
         CHECK(tester.compile("1000", 1'000.0));
@@ -47,12 +51,20 @@ TEST_CASE("Virtual Machine", "[vm]")
         CHECK(tester.compile("--42", 42.0));
     }
 
-    SECTION("Binary")
+    SECTION("Binary Arithmetic")
     {
         CHECK(tester.compile("1 + 17", 18.0));
         CHECK(tester.compile("-2 * 3", -6.0));
         CHECK(tester.compile("0 - 3", -3.0));
         CHECK(tester.compile("1 / 2", 0.5));
+    }
+
+    SECTION("Logical") {
+        CHECK(tester.compile("not true", dsValue{false}));
+        CHECK(tester.compile("true and false", dsValue{false}));
+        CHECK(tester.compile("true or false", dsValue{true}));
+        CHECK(tester.compile("true xor true", dsValue{false}));
+        CHECK(tester.compile("true and not false", dsValue{true}));
     }
 
     SECTION("Precedence")
@@ -64,10 +76,12 @@ TEST_CASE("Virtual Machine", "[vm]")
         CHECK(tester.compile("10 + 2 * -3 - (1 + 1)", 2.0));
     }
 
-    SECTION("Variable") {
+    SECTION("Variable")
+    {
         CHECK(tester.compile("Seven", 7.0));
         CHECK(tester.compile("-Eleven", -11.0));
         CHECK(tester.compile("Seven + Eleven", 18.0));
+        CHECK(tester.compile("Seven + 1", 8.0));
     }
 
     SECTION("Call")

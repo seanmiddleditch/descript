@@ -40,14 +40,15 @@ namespace descript {
     class dsExpressionCompiler final
     {
     public:
-        explicit dsExpressionCompiler(dsAllocator& alloc, dsExpressionCompilerHost& host, dsExpressionBuilder& builder) noexcept
-            : host_(host), builder_(builder), tokens_(alloc), ast_(alloc), expression_(alloc)
+        explicit dsExpressionCompiler(dsAllocator& alloc, dsExpressionCompilerHost& host) noexcept
+            : host_(host), tokens_(alloc), ast_(alloc), expression_(alloc)
         {
         }
 
         DS_API void reset();
         DS_API bool compile(char const* expression, char const* expressionEnd = nullptr);
-        DS_API bool build();
+        DS_API bool optimize();
+        DS_API bool build(dsExpressionBuilder& builder);
 
     private:
         DS_DEFINE_INDEX(TokenIndex);
@@ -67,6 +68,15 @@ namespace descript {
             Comma,
             LiteralInt,
             Identifier,
+            KeyTrue,
+            KeyFalse,
+            KeyOr,
+            KeyAnd,
+            KeyNot,
+            KeyXor,
+            KeyIs,
+            KeyNil,
+            Reserved,
         };
 
         enum class AstType : uint8_t
@@ -85,19 +95,33 @@ namespace descript {
         {
             Invalid,
 
-            // binary
+            // binary arithmetic
             Add,
             Sub,
             Mul,
             Div,
 
-            // unary
-            Not,
+            // binary logical
+            And,
+            Or,
+            Xor,
+
+            // unary arithmetic
             Negate,
+
+            // unary logical
+            Not,
 
             // special
             Group,
             Call,
+        };
+
+        enum class LiteralType
+        {
+            Integer,
+            Boolean,
+            Nil
         };
 
         struct Token
@@ -119,7 +143,11 @@ namespace descript {
                 int unused_ = 0;
                 struct Literal
                 {
-                    int64_t value = 0;
+                    LiteralType type = LiteralType::Nil;
+                    union Value {
+                        bool b = false;
+                        int64_t s64;
+                    } value;
                 } literal;
                 struct Binary
                 {
@@ -161,7 +189,6 @@ namespace descript {
         AstIndex parseFunc(AstIndex targetIndex);
 
         dsExpressionCompilerHost& host_;
-        dsExpressionBuilder& builder_;
         dsArray<Token, TokenIndex> tokens_;
         dsArray<Ast, AstIndex> ast_;
         dsString expression_;

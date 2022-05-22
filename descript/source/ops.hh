@@ -9,7 +9,10 @@ namespace descript {
     {
         Nop = 0,
 
-        // fast op-codes for pushing common constant values
+        // fast op-codes for pushing constant values
+        PushTrue,
+        PushFalse,
+        PushNil,
         Push0,
         Push1,
         Push2,
@@ -39,6 +42,9 @@ namespace descript {
         Sub,
         Mul,
         Div,
+        And,
+        Or,
+        Xor,
 
         Last,
     };

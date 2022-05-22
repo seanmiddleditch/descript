@@ -274,9 +274,7 @@ namespace descript {
         uint32_t numInputSlots() const noexcept override;
         uint32_t numOutputSlots() const noexcept override;
 
-        dsValue readSlotOr(dsInputSlotIndex slotIndex, dsValue const& defaultValue) override;
         bool readSlot(dsInputSlotIndex slotIndex, dsValue& out_value) override;
-        dsValue readSlotOr(dsOutputSlotIndex slotIndex, dsValue const& defaultValue) override;
         bool readSlot(dsOutputSlotIndex slotIndex, dsValue& out_value) override;
 
         void writeSlot(dsOutputSlotIndex slotIndex, dsValue const& value) override;
@@ -313,25 +311,9 @@ namespace descript {
         return header.nodes[nodeIndex_].outputSlotCount;
     }
 
-    dsValue Runtime::Context::readSlotOr(dsInputSlotIndex slotIndex, dsValue const& defaultValue)
-    {
-        dsValue result{0.0};
-        if (!runtime_.readSlot(instance_, nodeIndex_, slotIndex, result))
-            return defaultValue;
-        return result;
-    }
-
     bool Runtime::Context::readSlot(dsInputSlotIndex slotIndex, dsValue& out_value)
     {
         return runtime_.readSlot(instance_, nodeIndex_, slotIndex, out_value);
-    }
-
-    dsValue Runtime::Context::readSlotOr(dsOutputSlotIndex slotIndex, dsValue const& defaultValue)
-    {
-        dsValue result{0.0};
-        if (!runtime_.readSlot(instance_, nodeIndex_, slotIndex, result))
-            return defaultValue;
-        return result;
     }
 
     bool Runtime::Context::readSlot(dsOutputSlotIndex slotIndex, dsValue& out_value)

@@ -41,6 +41,22 @@ namespace descript {
         struct Not
         {
             static constexpr double apply(double val) noexcept { return !val; }
+            static constexpr bool apply(bool val) noexcept { return !val; }
+        };
+
+        struct And
+        {
+            static constexpr bool apply(bool left, bool right) noexcept { return left && right; }
+        };
+
+        struct Or
+        {
+            static constexpr bool apply(bool left, bool right) noexcept { return left || right; }
+        };
+
+        struct Xor
+        {
+            static constexpr bool apply(bool left, bool right) noexcept { return left ^ right; }
         };
 
         struct Add
@@ -69,6 +85,7 @@ namespace descript {
             switch (val.type())
             {
             case dsValueType::Double: return dsValue{Op::apply(val.as<double>())};
+            case dsValueType::Bool: return dsValue{Op::apply(val.as<bool>())};
             default: return dsValue{};
             }
         }
@@ -83,6 +100,7 @@ namespace descript {
             switch (left.type())
             {
             case dsValueType::Double: return dsValue{Op::apply(left.as<double>(), right.as<double>())};
+            case dsValueType::Bool: return dsValue{Op::apply(left.as<bool>(), right.as<bool>())};
             default: return dsValue{};
             }
         }
@@ -128,6 +146,9 @@ namespace descript {
             switch (dsOpCode(*ip))
             {
             case dsOpCode::Nop: break;
+            case dsOpCode::PushTrue: DS_PUSH(dsValue{true}); break;
+            case dsOpCode::PushFalse: DS_PUSH(dsValue{false}); break;
+            case dsOpCode::PushNil: DS_PUSH(dsValue{nullptr}); break;
             case dsOpCode::Push0: DS_PUSH(dsValue{0.0}); break;
             case dsOpCode::Push1: DS_PUSH(dsValue{1.0}); break;
             case dsOpCode::Push2: DS_PUSH(dsValue{2.0}); break;
@@ -217,6 +238,9 @@ namespace descript {
             case dsOpCode::Sub: DS_BINOP(Sub); break;
             case dsOpCode::Mul: DS_BINOP(Mul); break;
             case dsOpCode::Div: DS_BINOP(Div); break;
+            case dsOpCode::And: DS_BINOP(And); break;
+            case dsOpCode::Or: DS_BINOP(Or); break;
+            case dsOpCode::Xor: DS_BINOP(Xor); break;
             default: return false;
             }
         }

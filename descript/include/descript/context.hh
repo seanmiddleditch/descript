@@ -17,9 +17,7 @@ namespace descript {
         virtual uint32_t numInputSlots() const noexcept = 0;
         virtual uint32_t numOutputSlots() const noexcept = 0;
 
-        virtual dsValue readSlotOr(dsInputSlotIndex slotIndex, dsValue const& defaultValue) = 0;
         virtual bool readSlot(dsInputSlotIndex, dsValue& out_value) = 0;
-        virtual dsValue readSlotOr(dsOutputSlotIndex slotIndex, dsValue const& defaultValue) = 0;
         virtual bool readSlot(dsOutputSlotIndex, dsValue& out_value) = 0;
 
         virtual void writeSlot(dsOutputSlotIndex slotIndex, dsValue const& value) = 0;

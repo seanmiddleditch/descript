@@ -8,7 +8,9 @@ namespace descript {
 
     enum class dsValueType : uint8_t
     {
+        Nil,
         Double,
+        Bool,
     };
 
     class dsValue final
@@ -16,6 +18,10 @@ namespace descript {
     public:
         constexpr dsValue() noexcept = default;
         constexpr explicit dsValue(double val) noexcept : data_{.f64 = val}, type_{dsValueType::Double} {}
+        constexpr explicit dsValue(bool val) noexcept : data_{.b = val}, type_{dsValueType::Bool} {}
+        constexpr explicit dsValue(decltype(nullptr)) noexcept : type_{dsValueType::Nil} {}
+        template <typename T>
+        dsValue(T const&) = delete;
 
         constexpr dsValueType type() const noexcept { return type_; }
 
@@ -30,8 +36,9 @@ namespace descript {
     private:
         union {
             double f64 = 0.0;
+            bool b;
         } data_;
-        dsValueType type_ = dsValueType::Double;
+        dsValueType type_ = dsValueType::Nil;
 
         template <typename T>
         struct CastHelper;
@@ -42,6 +49,13 @@ namespace descript {
     {
         static constexpr bool is(dsValue const& val) noexcept { return val.type_ == dsValueType::Double; }
         static constexpr double as(dsValue const& val) noexcept { return val.data_.f64; }
+    };
+
+    template <>
+    struct dsValue::CastHelper<bool>
+    {
+        static constexpr bool is(dsValue const& val) noexcept { return val.type_ == dsValueType::Bool; }
+        static constexpr bool as(dsValue const& val) noexcept { return val.data_.b; }
     };
 
     template <typename T>
@@ -61,6 +75,12 @@ namespace descript {
         if (type_ != right.type_)
             return false;
 
-        return data_.f64 == right.data_.f64;
+        switch (type_)
+        {
+        case dsValueType::Nil: return true; // nil == nil
+        case dsValueType::Double: return data_.f64 == right.data_.f64;
+        case dsValueType::Bool: return data_.b == right.data_.b;
+        default: return false; // unknown type
+        }
     }
 } // namespace descript

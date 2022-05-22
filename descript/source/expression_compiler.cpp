@@ -14,6 +14,21 @@ namespace {
 
     constexpr bool isIdentifierFirst(char c) noexcept { return c == '_' || isAsciiLetter(c); }
     constexpr bool isIdentifierRest(char c) noexcept { return c == '_' || isAsciiLetter(c) || isAsciiDigit(c); }
+
+    constexpr char toAsciiLower(char c) noexcept { return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c; }
+
+    constexpr bool strCaseEqual(char const* first, char const* second, uint32_t maxLen)
+    {
+        while (*first != '\0' && *second != '\0' && maxLen != 0)
+        {
+            if (toAsciiLower(*first) != toAsciiLower(*second))
+                return false;
+            ++first;
+            ++second;
+            --maxLen;
+        }
+        return maxLen == 0;
+    }
 } // namespace
 
 namespace descript {
@@ -45,15 +60,26 @@ namespace descript {
         return true;
     }
 
-    bool dsExpressionCompiler::build()
+    bool dsExpressionCompiler::optimize()
     {
         DS_GUARD_OR(astRoot_ != dsInvalidIndex, false);
 
-        optimizedAstRoot_ = optimize(astRoot_);
+        if (optimizedAstRoot_ == dsInvalidIndex)
+            optimizedAstRoot_ = optimize(astRoot_);
+
         if (optimizedAstRoot_ == dsInvalidIndex)
             return false;
 
-        if (!generate(optimizedAstRoot_, builder_))
+        return true;
+    }
+
+    bool dsExpressionCompiler::build(dsExpressionBuilder& builder)
+    {
+        DS_GUARD_OR(astRoot_ != dsInvalidIndex, false);
+
+        AstIndex const rootIndex = optimizedAstRoot_ != dsInvalidIndex ? optimizedAstRoot_ : astRoot_;
+
+        if (!generate(rootIndex, builder))
             return false;
 
         return true;
@@ -73,6 +99,30 @@ namespace descript {
             {.match = '(', .type = TokenType::LParen},
             {.match = ')', .type = TokenType::RParen},
             {.match = ',', .type = TokenType::Comma},
+        };
+
+        constexpr struct KeywordMap
+        {
+            char const* keyword;
+            TokenType type;
+        } keywordMap[] = {
+            {.keyword = "true", .type = TokenType::KeyTrue},
+            {.keyword = "false", .type = TokenType::KeyFalse},
+            {.keyword = "and", .type = TokenType::KeyAnd},
+            {.keyword = "or", .type = TokenType::KeyOr},
+            {.keyword = "xor", .type = TokenType::KeyXor},
+            {.keyword = "not", .type = TokenType::KeyNot},
+            {.keyword = "is", .type = TokenType::KeyIs},
+            {.keyword = "nil", .type = TokenType::KeyNil},
+
+            // reserved words we'd like to consider using in the future
+            {.keyword = "null", .type = TokenType::Reserved},
+            {.keyword = "eq", .type = TokenType::Reserved},
+            {.keyword = "ne", .type = TokenType::Reserved},
+            {.keyword = "lt", .type = TokenType::Reserved},
+            {.keyword = "lte", .type = TokenType::Reserved},
+            {.keyword = "gt", .type = TokenType::Reserved},
+            {.keyword = "gte", .type = TokenType::Reserved},
         };
 
         char const* const inputStart = expression_.data();
@@ -106,7 +156,7 @@ namespace descript {
                     continue;
             }
 
-            // handle identifiers
+            // handle identifiers / keywords
             if (isIdentifierFirst(*input))
             {
                 ++input;
@@ -114,8 +164,19 @@ namespace descript {
                     ++input;
 
                 uint32_t const end = static_cast<uint32_t>(input - inputStart);
-                tokens_.pushBack(
-                    Token{.offset = offset, .length = static_cast<uint16_t>(end - offset.value()), .type = TokenType::Identifier});
+
+                TokenType type = TokenType::Identifier;
+
+                for (KeywordMap const& keyword : keywordMap)
+                {
+                    if (strCaseEqual(keyword.keyword, inputStart + offset.value(), end - offset.value()))
+                    {
+                        type = keyword.type;
+                        break;
+                    }
+                }
+
+                tokens_.pushBack(Token{.offset = offset, .length = static_cast<uint16_t>(end - offset.value()), .type = type});
                 continue;
             }
 
@@ -169,7 +230,8 @@ namespace descript {
     {
         switch (token)
         {
-        case TokenType::Minus: return {.op = Operator::Negate, .power = 3};
+        case TokenType::Minus: return {.op = Operator::Negate, .power = 5};
+        case TokenType::KeyNot: return {.op = Operator::Not, .power = 5};
         case TokenType::LParen: return {.op = Operator::Group, .power = 0};
         default: return {};
         }
@@ -179,11 +241,14 @@ namespace descript {
     {
         switch (token)
         {
-        case TokenType::Plus: return {.op = Operator::Add, .power = 1};
-        case TokenType::Minus: return {.op = Operator::Sub, .power = 1};
-        case TokenType::Star: return {.op = Operator::Mul, .power = 2};
-        case TokenType::Slash: return {.op = Operator::Div, .power = 2};
-        case TokenType::LParen: return {.op = Operator::Call, .power = 4};
+        case TokenType::KeyOr: return {.op = Operator::Or, .power = 1};
+        case TokenType::KeyXor: return {.op = Operator::Xor, .power = 1};
+        case TokenType::KeyAnd: return {.op = Operator::And, .power = 2};
+        case TokenType::Plus: return {.op = Operator::Add, .power = 3};
+        case TokenType::Minus: return {.op = Operator::Sub, .power = 3};
+        case TokenType::Star: return {.op = Operator::Mul, .power = 4};
+        case TokenType::Slash: return {.op = Operator::Div, .power = 4};
+        case TokenType::LParen: return {.op = Operator::Call, .power = 6};
         default: return {};
         }
     }
@@ -200,8 +265,22 @@ namespace descript {
         {
         case TokenType::LiteralInt:
             leftIndex = AstIndex{ast_.size()};
-            ast_.pushBack(
-                Ast{.type = AstType::Literal, .primaryTokenIndex = nextToken_, .data = {.literal{.value = leftToken.data.literalInt}}});
+            ast_.pushBack(Ast{.type = AstType::Literal,
+                .primaryTokenIndex = nextToken_,
+                .data = {.literal{.type = LiteralType::Integer, .value = {.s64 = leftToken.data.literalInt}}}});
+            ++nextToken_;
+            break;
+        case TokenType::KeyTrue:
+        case TokenType::KeyFalse:
+            leftIndex = AstIndex{ast_.size()};
+            ast_.pushBack(Ast{.type = AstType::Literal,
+                .primaryTokenIndex = nextToken_,
+                .data = {.literal{.type = LiteralType::Boolean, .value = {.b = leftToken.type == TokenType::KeyTrue}}}});
+            ++nextToken_;
+            break;
+        case TokenType::KeyNil:
+            leftIndex = AstIndex{ast_.size()};
+            ast_.pushBack(Ast{.type = AstType::Literal, .primaryTokenIndex = nextToken_, .data = {.literal{.type = LiteralType::Nil}}});
             ++nextToken_;
             break;
         case TokenType::Identifier:
@@ -333,22 +412,26 @@ namespace descript {
         case AstType::UnaryOp: {
             AstIndex childIndex = optimize(ast_[astIndex].data.unary.childIndex);
 
-            // we can fold literals operands
+            // we can only further optimize literals
             if (ast_[childIndex].type == AstType::Literal)
             {
-                AstIndex const newIndex{ast_.size()};
-                ast_.pushBack(Ast{.type = AstType::Literal,
-                    .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
-                    .data = {.literal = {.value = 0}}});
-
-                switch (ast_[astIndex].data.unary.op)
+                if (ast_[astIndex].data.unary.op == Operator::Negate && ast_[childIndex].data.literal.type == LiteralType::Integer)
                 {
-                case Operator::Negate: ast_[newIndex].data.literal.value = -ast_[childIndex].data.literal.value; break;
-                case Operator::Not: ast_[newIndex].data.literal.value = ast_[childIndex].data.literal.value ? 0 : 1; break;
-                default: DS_GUARD_OR(false, astIndex, "Unexpected operator");
+                    AstIndex const newIndex{ast_.size()};
+                    ast_.pushBack(Ast{.type = AstType::Literal,
+                        .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
+                        .data = {.literal = {.type = LiteralType::Integer, .value = {.s64 = -ast_[childIndex].data.literal.value.s64}}}});
+                    return newIndex;
                 }
 
-                return newIndex;
+                if (ast_[astIndex].data.unary.op == Operator::Not && ast_[childIndex].data.literal.type == LiteralType::Boolean)
+                {
+                    AstIndex const newIndex{ast_.size()};
+                    ast_.pushBack(Ast{.type = AstType::Literal,
+                        .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
+                        .data = {.literal = {.type = LiteralType::Boolean, .value = {.b = !ast_[childIndex].data.literal.value.b}}}});
+                    return newIndex;
+                }
             }
 
             // if our child was optimized, we need to create a new node with
@@ -365,34 +448,74 @@ namespace descript {
             break;
         }
         case AstType::BinaryOp: {
+            Operator const op = ast_[astIndex].data.binary.op;
+
             AstIndex leftChildIndex = optimize(ast_[astIndex].data.binary.leftIndex);
             AstIndex rightChildIndex = optimize(ast_[astIndex].data.binary.rightIndex);
 
-            // we can fold literals for some operators (not division, since we don't do floating math in the compiler)
-            if (ast_[astIndex].data.binary.op != Operator::Div && ast_[leftChildIndex].type == AstType::Literal &&
-                ast_[rightChildIndex].type == AstType::Literal)
+            // we can fold literals for some operators (in all cases, only when operands are the same type -- FIXME: not a good assumption)
+            if (ast_[leftChildIndex].type == AstType::Literal && ast_[rightChildIndex].type == AstType::Literal &&
+                ast_[leftChildIndex].data.literal.type == ast_[rightChildIndex].data.literal.type)
             {
-                AstIndex const newIndex{ast_.size()};
-                ast_.pushBack(Ast{.type = AstType::Literal,
-                    .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
-                    .data = {.literal = {.value = 0}}});
+                LiteralType const litType = ast_[leftChildIndex].data.literal.type;
 
-                // FIXME: handle overflow
-                switch (ast_[astIndex].data.binary.op)
+                // arithmetic operations on integers (we don't handle division yet because we're integer-only
+                if (litType == LiteralType::Integer && (op == Operator::Add || op == Operator::Sub || op == Operator::Mul))
                 {
-                case Operator::Add:
-                    ast_[newIndex].data.literal.value = ast_[leftChildIndex].data.literal.value + ast_[rightChildIndex].data.literal.value;
-                    break;
-                case Operator::Sub:
-                    ast_[newIndex].data.literal.value = ast_[leftChildIndex].data.literal.value - ast_[rightChildIndex].data.literal.value;
-                    break;
-                case Operator::Mul:
-                    ast_[newIndex].data.literal.value = ast_[leftChildIndex].data.literal.value * ast_[rightChildIndex].data.literal.value;
-                    break;
-                default: DS_GUARD_OR(false, astIndex, "Unexpected operator");
+                    AstIndex const newIndex{ast_.size()};
+                    ast_.pushBack(Ast{.type = AstType::Literal,
+                        .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
+                        .data = {.literal = {.type = litType, .value = {.s64 = 0}}}});
+
+                    // FIXME: handle overflow
+                    switch (ast_[astIndex].data.binary.op)
+                    {
+                    case Operator::Add:
+                        ast_[newIndex].data.literal.value.s64 =
+                            ast_[leftChildIndex].data.literal.value.s64 + ast_[rightChildIndex].data.literal.value.s64;
+                        break;
+                    case Operator::Sub:
+                        ast_[newIndex].data.literal.value.s64 =
+                            ast_[leftChildIndex].data.literal.value.s64 - ast_[rightChildIndex].data.literal.value.s64;
+                        break;
+                    case Operator::Mul:
+                        ast_[newIndex].data.literal.value.s64 =
+                            ast_[leftChildIndex].data.literal.value.s64 * ast_[rightChildIndex].data.literal.value.s64;
+                        break;
+                    default: DS_GUARD_OR(false, astIndex, "Unexpected operator");
+                    }
+
+                    return newIndex;
                 }
 
-                return newIndex;
+                // logical operations on booleans
+                if (litType == LiteralType::Boolean && (op == Operator::Or || op == Operator::And || op == Operator::Xor))
+                {
+                    AstIndex const newIndex{ast_.size()};
+                    ast_.pushBack(Ast{.type = AstType::Literal,
+                        .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
+                        .data = {.literal = {.type = litType, .value = {.s64 = 0}}}});
+
+                    // FIXME: handle overflow
+                    switch (ast_[astIndex].data.binary.op)
+                    {
+                    case Operator::And:
+                        ast_[newIndex].data.literal.value.b =
+                            ast_[leftChildIndex].data.literal.value.b && ast_[rightChildIndex].data.literal.value.b;
+                        break;
+                    case Operator::Or:
+                        ast_[newIndex].data.literal.value.b =
+                            ast_[leftChildIndex].data.literal.value.b || ast_[rightChildIndex].data.literal.value.b;
+                        break;
+                    case Operator::Xor:
+                        ast_[newIndex].data.literal.value.b =
+                            ast_[leftChildIndex].data.literal.value.b ^ ast_[rightChildIndex].data.literal.value.b;
+                        break;
+                    default: DS_GUARD_OR(false, astIndex, "Unexpected operator");
+                    }
+
+                    return newIndex;
+                }
             }
 
             // if either child was optimized, we need to create a new node with
@@ -501,76 +624,90 @@ namespace descript {
         switch (ast.type)
         {
         case AstType::Literal:
-            switch (ast.data.literal.value)
+            if (ast.data.literal.type == LiteralType::Boolean)
             {
-            case 0: builder.pushOp((uint8_t)dsOpCode::Push0); break;
-            case 1: builder.pushOp((uint8_t)dsOpCode::Push1); break;
-            case 2: builder.pushOp((uint8_t)dsOpCode::Push2); break;
-            case -1: builder.pushOp((uint8_t)dsOpCode::PushNeg1); break;
-            default:
-                if (ast.data.literal.value >= 0)
-                {
-                    int64_t const value = ast.data.literal.value;
-
-                    if (value <= UINT8_MAX)
-                    {
-                        uint8_t const value8 = static_cast<uint8_t>(value);
-
-                        builder.pushOp((uint8_t)dsOpCode::PushU8);
-                        builder.pushOp((uint8_t)value8);
-                        break;
-                    }
-
-                    if (value <= UINT16_MAX)
-                    {
-                        uint16_t const value16 = static_cast<uint16_t>(value);
-
-                        builder.pushOp((uint8_t)dsOpCode::PushU16);
-                        builder.pushOp((uint8_t)(value16 >> 8));
-                        builder.pushOp((uint8_t)(value16 & 0xff));
-                        break;
-                    }
-                }
-                else
-                {
-                    int64_t const value = ast.data.literal.value;
-
-                    if (value >= INT8_MIN)
-                    {
-                        uint8_t const value8 = static_cast<int8_t>(value);
-
-                        builder.pushOp((uint8_t)dsOpCode::PushS8);
-                        builder.pushOp((uint8_t)value8);
-                        break;
-                    }
-
-                    if (value >= INT16_MAX)
-                    {
-                        uint16_t const value16 = static_cast<int16_t>(value);
-
-                        builder.pushOp((uint8_t)dsOpCode::PushS16);
-                        builder.pushOp((uint8_t)(value16 >> 8));
-                        builder.pushOp((uint8_t)(value16 & 0xff));
-                        break;
-                    }
-                }
-
-                {
-                    dsExpressionConstantIndex const index = builder.pushConstant(dsValue{static_cast<double>(ast.data.literal.value)});
-                    if (index == dsInvalidIndex)
-
-                    {
-                        // FIXME: error, constant overflow
-                        return false;
-                    }
-
-                    builder.pushOp((uint8_t)dsOpCode::PushConstant);
-                    builder.pushOp((uint8_t)(index.value() >> 8));
-                    builder.pushOp((uint8_t)(index.value() & 0xff));
-                }
-                break;
+                builder.pushOp((uint8_t)(ast.data.literal.value.b ? dsOpCode::PushTrue : dsOpCode::PushFalse));
+                return true;
             }
-            return true;
+
+            if (ast.data.literal.type == LiteralType::Nil)
+            {
+                builder.pushOp((uint8_t)dsOpCode::PushNil);
+                return true;
+            }
+
+            if (ast.data.literal.type == LiteralType::Integer)
+            {
+                int64_t const value = ast.data.literal.value.s64;
+
+                switch (value)
+                {
+                case 0: builder.pushOp((uint8_t)dsOpCode::Push0); break;
+                case 1: builder.pushOp((uint8_t)dsOpCode::Push1); break;
+                case 2: builder.pushOp((uint8_t)dsOpCode::Push2); break;
+                case -1: builder.pushOp((uint8_t)dsOpCode::PushNeg1); break;
+                default:
+                    if (value >= 0)
+                    {
+                        if (value <= UINT8_MAX)
+                        {
+                            uint8_t const value8 = static_cast<uint8_t>(value);
+
+                            builder.pushOp((uint8_t)dsOpCode::PushU8);
+                            builder.pushOp((uint8_t)value8);
+                            break;
+                        }
+
+                        if (value <= UINT16_MAX)
+                        {
+                            uint16_t const value16 = static_cast<uint16_t>(value);
+
+                            builder.pushOp((uint8_t)dsOpCode::PushU16);
+                            builder.pushOp((uint8_t)(value16 >> 8));
+                            builder.pushOp((uint8_t)(value16 & 0xff));
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if (value >= INT8_MIN)
+                        {
+                            uint8_t const value8 = static_cast<int8_t>(value);
+
+                            builder.pushOp((uint8_t)dsOpCode::PushS8);
+                            builder.pushOp((uint8_t)value8);
+                            break;
+                        }
+
+                        if (value >= INT16_MAX)
+                        {
+                            uint16_t const value16 = static_cast<int16_t>(value);
+
+                            builder.pushOp((uint8_t)dsOpCode::PushS16);
+                            builder.pushOp((uint8_t)(value16 >> 8));
+                            builder.pushOp((uint8_t)(value16 & 0xff));
+                            break;
+                        }
+                    }
+
+                    {
+                        dsExpressionConstantIndex const index = builder.pushConstant(dsValue{static_cast<double>(value)});
+                        if (index == dsInvalidIndex)
+
+                        {
+                            // FIXME: error, constant overflow
+                            return false;
+                        }
+
+                        builder.pushOp((uint8_t)dsOpCode::PushConstant);
+                        builder.pushOp((uint8_t)(index.value() >> 8));
+                        builder.pushOp((uint8_t)(index.value() & 0xff));
+                    }
+                }
+                return true;
+            }
+
+            DS_GUARD_OR(false, false, "Unexpected literal type");
         case AstType::Identifier: {
             Token const& identToken = tokens_[ast.primaryTokenIndex];
             char const* const identStart = expression_.data() + identToken.offset.value();
@@ -606,6 +743,9 @@ namespace descript {
             case Operator::Sub: builder.pushOp((uint8_t)dsOpCode::Sub); break;
             case Operator::Mul: builder.pushOp((uint8_t)dsOpCode::Mul); break;
             case Operator::Div: builder.pushOp((uint8_t)dsOpCode::Div); break;
+            case Operator::And: builder.pushOp((uint8_t)dsOpCode::And); break;
+            case Operator::Or: builder.pushOp((uint8_t)dsOpCode::Or); break;
+            case Operator::Xor: builder.pushOp((uint8_t)dsOpCode::Xor); break;
             default: DS_GUARD_OR(false, false, "Unknown binary operator type");
             }
             return true;
@@ -615,6 +755,7 @@ namespace descript {
             switch (ast.data.unary.op)
             {
             case Operator::Negate: builder.pushOp((uint8_t)dsOpCode::Neg); break;
+            case Operator::Not: builder.pushOp((uint8_t)dsOpCode::Not); break;
             default: DS_GUARD_OR(false, false, "Unknown unary operator type");
             }
             return true;

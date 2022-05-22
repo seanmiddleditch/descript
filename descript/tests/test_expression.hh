@@ -35,9 +35,12 @@ namespace descript::test::expression {
         {
             Success,
             CompileFailed,
+            OptimizeFailed,
             BuildFailed,
+            OptimizedBuildFailed,
             EvalFailed,
-            TypeFailed,
+            OptimizedEvalFailed,
+            OptimizedResultFailed,
             ResultFailed,
         } code = Code::Success;
         dsValue expected;
@@ -54,12 +57,13 @@ namespace descript::test::expression {
             {
             case Result::Code::Success: return os << "Success\nExpected: " << result.expected << "\nResult: " << result.actual;
             case Result::Code::CompileFailed: return os << "Compile Failed\nExpected: " << result.expected;
+            case Result::Code::OptimizeFailed: return os << "Optimize Failed\nExpected: " << result.expected;
             case Result::Code::BuildFailed: return os << "Build Failed\nExpected: " << result.expected;
+            case Result::Code::OptimizedBuildFailed: return os << "Build (Optimized) Failed\nExpected: " << result.expected;
             case Result::Code::EvalFailed: return os << "Eval Failed\nExpected: " << result.expected;
-            case Result::Code::TypeFailed:
-                return os << "Type Check Failed\nExpected: " << result.expected << "\nResult: " << result.actual;
-            case Result::Code::ResultFailed:
-                return os << "Result Failed\nExpected: " << result.expected << "\nResult: " << result.actual;
+            case Result::Code::OptimizedEvalFailed: return os << "Eval (Optimized) Failed\nExpected: " << result.expected;
+            case Result::Code::ResultFailed: return os << "Result Failed\nExpected: " << result.expected << "\nResult: " << result.actual;
+            case Result::Code::OptimizedResultFailed: return os << "Result (Optimized) Failed\nExpected: " << result.expected << "\nResult: " << result.actual;
             default: return os;
             }
         }
@@ -69,7 +73,7 @@ namespace descript::test::expression {
     {
     public:
         explicit ExpressionTester(dsAllocator& alloc, dsSpan<Variable const> variables, dsSpan<Function const> functions) noexcept
-            : byteCode_(alloc), constants_(alloc), variables_(variables), functions_(functions), compiler_(alloc, *this, *this)
+            : byteCode_(alloc), constants_(alloc), variables_(variables), functions_(functions), compiler_(alloc, *this)
         {
         }
 
@@ -105,26 +109,39 @@ namespace descript::test::expression {
     {
         switch (value.type())
         {
+        case dsValueType::Nil: return os << "nil";
         case dsValueType::Double: return os << "double(" << value.as<double>() << ')';
+        case dsValueType::Bool: return os << (value.as<bool>() ? "true" : "false");
         default: return os << "unknown(???)";
         }
     }
 
     Result ExpressionTester::compile(char const* expression, dsValue const& expected)
     {
-        uint32_t byteCodeOffset = byteCode_.size();
+        uint32_t const byteCodeOffset = byteCode_.size();
 
         if (!compiler_.compile(expression))
             return Result{Result::Code::CompileFailed, expected};
-        if (!compiler_.build())
+        if (!compiler_.build(*this))
             return Result{Result::Code::BuildFailed, expected};
         dsValue result;
         if (!dsEvaluate(*this, byteCode_.data() + byteCodeOffset, byteCode_.size() - byteCodeOffset, result))
             return Result{Result::Code::EvalFailed, expected};
-        if (result.type() != expected.type())
-            return Result{Result::Code::TypeFailed, expected, result};
         if (result != expected)
             return Result{Result::Code::ResultFailed, expected, result};
+
+        uint32_t const optimizedByteCodeOffset = byteCode_.size();
+
+        if (!compiler_.optimize())
+            return Result{Result::Code::OptimizeFailed, expected};
+        if (!compiler_.build(*this))
+            return Result{Result::Code::OptimizedBuildFailed, expected};
+        dsValue optimizedResult;
+        if (!dsEvaluate(*this, byteCode_.data() + optimizedByteCodeOffset, byteCode_.size() - optimizedByteCodeOffset, optimizedResult))
+            return Result{Result::Code::OptimizedEvalFailed, expected};
+        if (optimizedResult != expected)
+            return Result{Result::Code::OptimizedResultFailed, expected, optimizedResult};
+
         return Result{Result::Code::Success, expected, result};
     };
 
@@ -171,7 +188,7 @@ namespace descript::test::expression {
             }
             ++nextIndex;
         }
-        DS_GUARD_OR(false, dsInvalidIndex, "Invalid variable has, miscompile");
+        DS_GUARD_OR(false, dsInvalidIndex, "Invalid variable hash, miscompile");
     }
 
     dsExpressionFunctionIndex ExpressionTester::pushFunction(dsFunctionId functionId)
