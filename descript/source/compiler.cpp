@@ -1084,10 +1084,14 @@ namespace descript {
                 Expression& expression = expressions_[binding.expressionIndex];
                 expression.live = true;
 
-                expression.byteCodeStart = dsAssemblyByteCodeIndex{byteCode_.size()};
 
                 builder.bindSlot(binding.compiledSlotIndex);
                 if (!compiler.compile(expression.expression.cStr()))
+                    error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
+
+                expression.byteCodeStart = dsAssemblyByteCodeIndex{byteCode_.size()};
+
+                if (!compiler.build())
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
 
                 expression.byteCodeCount = byteCode_.size() - expression.byteCodeStart.value();

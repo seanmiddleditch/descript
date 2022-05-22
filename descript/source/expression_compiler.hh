@@ -47,6 +47,7 @@ namespace descript {
 
         DS_API void reset();
         DS_API bool compile(char const* expression, char const* expressionEnd = nullptr);
+        DS_API bool build();
 
     private:
         DS_DEFINE_INDEX(TokenIndex);
@@ -116,6 +117,10 @@ namespace descript {
             AstIndex nextArgIndex = dsInvalidIndex;
             union Data {
                 int unused_ = 0;
+                struct Literal
+                {
+                    int64_t value = 0;
+                } literal;
                 struct Binary
                 {
                     Operator op = Operator::Invalid;
@@ -147,7 +152,8 @@ namespace descript {
 
         bool tokenize();
         AstIndex parse();
-        bool generate(AstIndex rootIndex);
+        AstIndex optimize(AstIndex astIndex);
+        bool generate(AstIndex astIndex, dsExpressionBuilder& builder);
 
         static Precedence unaryPrecedence(TokenType token) noexcept;
         static Precedence binaryPrecedence(TokenType token) noexcept;
@@ -160,5 +166,7 @@ namespace descript {
         dsArray<Ast, AstIndex> ast_;
         dsString expression_;
         TokenIndex nextToken_ = dsInvalidIndex;
+        AstIndex astRoot_ = dsInvalidIndex;
+        AstIndex optimizedAstRoot_ = dsInvalidIndex;
     };
 } // namespace descript

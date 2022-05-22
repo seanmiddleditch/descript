@@ -12,7 +12,14 @@ namespace descript {
         // fast op-codes for pushing common constant values
         Push0,
         Push1,
+        Push2,
         PushNeg1,
+
+        // fast op-codes for pushing immediates
+        PushS8,
+        PushU8,
+        PushS16,
+        PushU16,
 
         // generic constant push
         PushConstant,

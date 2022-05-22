@@ -119,7 +119,7 @@ namespace descript {
 
         uint8_t const* const opsEnd = ops + opsLen;
 
-        constexpr uint32_t stackSize = 16;
+        constexpr uint32_t stackSize = 32;
         dsValue stack[stackSize];
         uint32_t stackTop = 0;
 
@@ -130,11 +130,43 @@ namespace descript {
             case dsOpCode::Nop: break;
             case dsOpCode::Push0: DS_PUSH(dsValue{0.0}); break;
             case dsOpCode::Push1: DS_PUSH(dsValue{1.0}); break;
+            case dsOpCode::Push2: DS_PUSH(dsValue{2.0}); break;
             case dsOpCode::PushNeg1: DS_PUSH(dsValue{-1.0}); break;
+            case dsOpCode::PushS8:
+                if (++ip == opsEnd)
+                    return false;
+                DS_PUSH(dsValue{static_cast<double>(static_cast<int8_t>(*ip))});
+                break;
+            case dsOpCode::PushU8:
+                if (++ip == opsEnd)
+                    return false;
+                DS_PUSH(dsValue{static_cast<double>(*ip)});
+                break;
+            case dsOpCode::PushS16: {
+                if (++ip == opsEnd)
+                    return false;
+                uint16_t value = *ip << 8;
+                if (++ip == opsEnd)
+                    return false;
+                value |= *ip;
+                DS_PUSH(dsValue{static_cast<double>(static_cast<int16_t>(value))});
+                break;
+            }
+            case dsOpCode::PushU16: {
+                if (++ip == opsEnd)
+                    return false;
+                uint16_t value = *ip << 8;
+                if (++ip == opsEnd)
+                    return false;
+                value |= *ip;
+                DS_PUSH(dsValue{static_cast<double>(value)});
+                break;
+            }
             case dsOpCode::PushConstant: {
                 if (++ip == opsEnd)
                     return false;
                 uint16_t index = *ip << 8;
+
                 if (++ip == opsEnd)
                     return false;
                 index |= *ip;

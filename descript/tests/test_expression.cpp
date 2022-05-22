@@ -37,7 +37,8 @@ TEST_CASE("Virtual Machine", "[vm]")
     SECTION("Constants") {
         CHECK(tester.compile("0", 0.0));
         CHECK(tester.compile("10", 10.0));
-        CHECK(tester.compile("100000", 100'000.0));
+        CHECK(tester.compile("1000", 1'000.0));
+        CHECK(tester.compile("1000000", 1'000'000.0));
     }
 
     SECTION("Negate")
@@ -65,7 +66,7 @@ TEST_CASE("Virtual Machine", "[vm]")
 
     SECTION("Variable") {
         CHECK(tester.compile("Seven", 7.0));
-        CHECK(tester.compile("Eleven", 11.0));
+        CHECK(tester.compile("-Eleven", -11.0));
         CHECK(tester.compile("Seven + Eleven", 18.0));
     }
 
@@ -73,7 +74,7 @@ TEST_CASE("Virtual Machine", "[vm]")
     {
         CHECK(tester.compile("Add()", 0.0));
         CHECK(tester.compile("Add(1)", 1.0));
-        CHECK(tester.compile("Add(1, 1)", 2.0));
+        CHECK(tester.compile("-Add(1, 1)", -2.0));
         CHECK(tester.compile("Add(1) + 1", 2.0));
         CHECK(tester.compile("Add(1, 1) * Add(2, 3)", 10.0));
         CHECK(tester.compile("Add(1, Add(2, 3), -2)", 4.0));

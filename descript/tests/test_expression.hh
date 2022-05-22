@@ -35,6 +35,7 @@ namespace descript::test::expression {
         {
             Success,
             CompileFailed,
+            BuildFailed,
             EvalFailed,
             TypeFailed,
             ResultFailed,
@@ -42,7 +43,7 @@ namespace descript::test::expression {
         dsValue expected;
         dsValue actual;
 
-        /*implicit*/ Result(Code code) noexcept : code(code) {}
+        Result(Code code, dsValue const& expected) noexcept : code(code), expected(expected) {}
         Result(Code code, dsValue const& expected, dsValue const& actual) noexcept : code(code), expected(expected), actual(actual) {}
 
         explicit operator bool() const noexcept { return code == Code::Success; }
@@ -53,6 +54,7 @@ namespace descript::test::expression {
             {
             case Result::Code::Success: return os << "Success\nExpected: " << result.expected << "\nResult: " << result.actual;
             case Result::Code::CompileFailed: return os << "Compile Failed\nExpected: " << result.expected;
+            case Result::Code::BuildFailed: return os << "Build Failed\nExpected: " << result.expected;
             case Result::Code::EvalFailed: return os << "Eval Failed\nExpected: " << result.expected;
             case Result::Code::TypeFailed:
                 return os << "Type Check Failed\nExpected: " << result.expected << "\nResult: " << result.actual;
@@ -113,15 +115,17 @@ namespace descript::test::expression {
         uint32_t byteCodeOffset = byteCode_.size();
 
         if (!compiler_.compile(expression))
-            return Result::Code::CompileFailed;
+            return Result{Result::Code::CompileFailed, expected};
+        if (!compiler_.build())
+            return Result{Result::Code::BuildFailed, expected};
         dsValue result;
         if (!dsEvaluate(*this, byteCode_.data() + byteCodeOffset, byteCode_.size() - byteCodeOffset, result))
-            return Result::Code::EvalFailed;
+            return Result{Result::Code::EvalFailed, expected};
         if (result.type() != expected.type())
-            return {Result::Code::TypeFailed, dsValue{expected}, result};
+            return Result{Result::Code::TypeFailed, expected, result};
         if (result != expected)
-            return {Result::Code::ResultFailed, dsValue{expected}, result};
-        return {Result::Code::Success, dsValue{expected}, result};
+            return Result{Result::Code::ResultFailed, expected, result};
+        return Result{Result::Code::Success, expected, result};
     };
 
     bool ExpressionTester::lookupVariable(dsName name) const noexcept
