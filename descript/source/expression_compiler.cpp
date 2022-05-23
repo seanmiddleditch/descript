@@ -36,10 +36,14 @@ namespace descript {
     {
         tokens_.clear();
         ast_.clear();
+        mid_.clear();
+        astLinks_.clear();
+        midLinks_.clear();
         expression_.reset();
         nextToken_ = dsInvalidIndex;
         astRoot_ = dsInvalidIndex;
         optimizedAstRoot_ = dsInvalidIndex;
+        midRoot_ = dsInvalidIndex;
     }
 
     bool dsExpressionCompiler::compile(char const* expression, char const* expressionEnd)
@@ -57,29 +61,32 @@ namespace descript {
         if (astRoot_ == dsInvalidIndex)
             return false;
 
-        return true;
+        auto const [success, midRoot] = lower(astRoot_);
+        midRoot_ = midRoot;
+
+        return success;
     }
 
     bool dsExpressionCompiler::optimize()
     {
-        DS_GUARD_OR(astRoot_ != dsInvalidIndex, false);
+        DS_GUARD_OR(midRoot_ != dsInvalidIndex, false);
 
-        if (optimizedAstRoot_ == dsInvalidIndex)
-            optimizedAstRoot_ = optimize(astRoot_);
-
-        if (optimizedAstRoot_ == dsInvalidIndex)
+        MidIndex const midIndex = optimize(midRoot_);
+        if (midIndex == dsInvalidIndex)
             return false;
 
+        midRoot_ = midIndex;
         return true;
     }
 
     bool dsExpressionCompiler::build(dsExpressionBuilder& builder)
     {
         DS_GUARD_OR(astRoot_ != dsInvalidIndex, false);
+        DS_GUARD_OR(midRoot_ != dsInvalidIndex, false);
 
         AstIndex const rootIndex = optimizedAstRoot_ != dsInvalidIndex ? optimizedAstRoot_ : astRoot_;
 
-        if (!generate(rootIndex, builder))
+        if (!generate(midRoot_, builder))
             return false;
 
         return true;
@@ -123,6 +130,17 @@ namespace descript {
             {.keyword = "lte", .type = TokenType::Reserved},
             {.keyword = "gt", .type = TokenType::Reserved},
             {.keyword = "gte", .type = TokenType::Reserved},
+            {.keyword = "if", .type = TokenType::Reserved},
+            {.keyword = "then", .type = TokenType::Reserved},
+            {.keyword = "end", .type = TokenType::Reserved},
+            {.keyword = "for", .type = TokenType::Reserved},
+            {.keyword = "while", .type = TokenType::Reserved},
+            {.keyword = "do", .type = TokenType::Reserved},
+            {.keyword = "done", .type = TokenType::Reserved},
+            {.keyword = "in", .type = TokenType::Reserved},
+            {.keyword = "case", .type = TokenType::Reserved},
+            {.keyword = "when", .type = TokenType::Reserved},
+            {.keyword = "where", .type = TokenType::Reserved},
         };
 
         char const* const inputStart = expression_.data();
@@ -373,16 +391,19 @@ namespace descript {
             return callIndex;
         }
 
-        AstIndex prevArgIndex = dsInvalidIndex;
+        AstLinkIndex prevLinkIndex = dsInvalidIndex;
         while (tokens_.contains(nextToken_))
         {
             AstIndex const argIndex = parseExpr(0);
 
-            if (prevArgIndex == dsInvalidIndex)
-                ast_[callIndex].data.call.firstArgIndex = argIndex;
+            AstLinkIndex const linkIndex{astLinks_.size()};
+            astLinks_.pushBack(AstLink{.childIndex = argIndex});
+
+            if (prevLinkIndex == dsInvalidIndex)
+                ast_[callIndex].data.call.firstArgIndex = linkIndex;
             else
-                ast_[prevArgIndex].nextArgIndex = argIndex;
-            prevArgIndex = argIndex;
+                astLinks_[prevLinkIndex].nextIndex = linkIndex;
+            prevLinkIndex = linkIndex;
 
             // we only continue looping if we get a comma
             if (tokens_.contains(nextToken_) && tokens_[nextToken_].type == TokenType::Comma)
@@ -405,84 +426,229 @@ namespace descript {
         return callIndex;
     }
 
-    auto dsExpressionCompiler::optimize(AstIndex astIndex) -> AstIndex
+    auto dsExpressionCompiler::lower(AstIndex astIndex) -> MidResult
     {
-        switch (ast_[astIndex].type)
+        DS_GUARD_OR(astIndex != dsInvalidIndex, MidResult(false, dsInvalidIndex));
+
+        Ast const& ast = ast_[astIndex];
+        switch (ast.type)
         {
+        case AstType::Literal: {
+            MidIndex const midIndex{mid_.size()};
+            Mid& mid = mid_.pushBack(Mid{.type = MidType::Literal, .astIndex = astIndex, .data = {.literal = {}}});
+
+            switch (tokens_[ast.primaryTokenIndex].type)
+            {
+            case TokenType::KeyTrue:
+            case TokenType::KeyFalse:
+                mid.valueType = dsValueType::Bool;
+                mid.data.literal.type = LiteralType::Boolean;
+                mid.data.literal.value = {.b = tokens_[ast.primaryTokenIndex].type == TokenType::KeyTrue};
+                return {true, midIndex};
+            case TokenType::KeyNil:
+                mid.valueType = dsValueType::Nil;
+                mid.data.literal.type = LiteralType::Nil;
+                return {true, midIndex};
+            case TokenType::LiteralInt:
+                mid.valueType = dsValueType::Double;
+                mid.data.literal.type = LiteralType::Integer;
+                mid.data.literal.value = {.s64 = tokens_[ast.primaryTokenIndex].data.literalInt};
+                return {true, midIndex};
+            default: DS_GUARD_OR(false, MidResult(false, midIndex), "Unknown ast node type");
+            }
+        }
         case AstType::UnaryOp: {
-            AstIndex childIndex = optimize(ast_[astIndex].data.unary.childIndex);
+            auto const [success, operandIndex] = lower(ast.data.unary.childIndex);
 
-            // we can only further optimize literals
-            if (ast_[childIndex].type == AstType::Literal)
+            MidIndex const midIndex{mid_.size()};
+            Mid& mid = mid_.pushBack(Mid{.type = MidType::UnaryOp,
+                .astIndex = astIndex,
+                .data = {.unary = {.op = ast.data.unary.op, .childIndex = operandIndex}}});
+
+            switch (ast.data.unary.op)
             {
-                if (ast_[astIndex].data.unary.op == Operator::Negate && ast_[childIndex].data.literal.type == LiteralType::Integer)
-                {
-                    AstIndex const newIndex{ast_.size()};
-                    ast_.pushBack(Ast{.type = AstType::Literal,
-                        .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
-                        .data = {.literal = {.type = LiteralType::Integer, .value = {.s64 = -ast_[childIndex].data.literal.value.s64}}}});
-                    return newIndex;
-                }
-
-                if (ast_[astIndex].data.unary.op == Operator::Not && ast_[childIndex].data.literal.type == LiteralType::Boolean)
-                {
-                    AstIndex const newIndex{ast_.size()};
-                    ast_.pushBack(Ast{.type = AstType::Literal,
-                        .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
-                        .data = {.literal = {.type = LiteralType::Boolean, .value = {.b = !ast_[childIndex].data.literal.value.b}}}});
-                    return newIndex;
-                }
+            case Operator::Negate:
+                mid.valueType = dsValueType::Double;
+                if (mid_[operandIndex].valueType != dsValueType::Double)
+                    return {false, midIndex}; // FIXME: error on type
+                return {success, midIndex};
+            case Operator::Not:
+                mid.valueType = dsValueType::Bool;
+                if (mid_[operandIndex].valueType != dsValueType::Bool)
+                    return {false, midIndex}; // FIXME: error on type
+                return {success, midIndex};
+            default: DS_GUARD_OR(false, MidResult(false, midIndex), "Unknown unary operator");
             }
-
-            // if our child was optimized, we need to create a new node with
-            // the new child index
-            if (childIndex != ast_[astIndex].data.unary.childIndex)
-            {
-                AstIndex const newIndex{ast_.size()};
-                ast_.pushBack(Ast{.type = AstType::UnaryOp,
-                    .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
-                    .data = {.unary = {.op = ast_[astIndex].data.unary.op, .childIndex = childIndex}}});
-                return newIndex;
-            }
-
-            break;
         }
         case AstType::BinaryOp: {
-            Operator const op = ast_[astIndex].data.binary.op;
+            auto const [leftSuccess, leftIndex] = lower(ast.data.binary.leftIndex);
+            auto const [rightSuccess, rightIndex] = lower(ast.data.binary.rightIndex);
+            bool const success = leftSuccess && rightSuccess;
 
-            AstIndex leftChildIndex = optimize(ast_[astIndex].data.binary.leftIndex);
-            AstIndex rightChildIndex = optimize(ast_[astIndex].data.binary.rightIndex);
+            MidIndex const midIndex{mid_.size()};
+            Mid& mid = mid_.pushBack(Mid{.type = MidType::BinaryOp,
+                .astIndex = astIndex,
+                .data = {.binary = {.op = ast.data.binary.op, .leftIndex = leftIndex, .rightIndex = rightIndex}}});
+
+            // FIXME: don't assume all binary operations are homogenously typed
+            if (mid_[leftIndex].valueType != mid_[rightIndex].valueType)
+                return {false, midIndex}; // FIXME: type error
+
+            switch (ast.data.unary.op)
+            {
+            case Operator::Add:
+            case Operator::Sub:
+            case Operator::Mul:
+            case Operator::Div:
+                mid.valueType = dsValueType::Double;
+                if (mid_[leftIndex].valueType != dsValueType::Double)
+                    return {false, midIndex}; // FIXME: error on type
+                return {success, midIndex};
+            case Operator::And:
+            case Operator::Or:
+            case Operator::Xor:
+                mid.valueType = dsValueType::Bool;
+                if (mid_[leftIndex].valueType != dsValueType::Bool)
+                    return {false, midIndex}; // FIXME: error on type
+                return {success, midIndex};
+            default: DS_GUARD_OR(false, MidResult(false, midIndex), "Unknown unary operator");
+            }
+        }
+        case AstType::Identifier: {
+            MidIndex const midIndex{mid_.size()};
+            Mid& mid = mid_.pushBack(Mid{.type = MidType::Variable, .astIndex = astIndex, .data = {.variable = {}}});
+
+            Token const& identToken = tokens_[ast.primaryTokenIndex];
+            char const* const identStart = expression_.data() + identToken.offset.value();
+            char const* const identEnd = identStart + identToken.length;
+
+            if (!host_.lookupVariable(dsName{identStart, identEnd}, mid.valueType))
+            {
+                // FIXME: error, invalid variable
+                return {false, midIndex};
+            }
+
+            mid.data.variable.nameHash = dsHashFnv1a64(identStart, identEnd);
+
+            return {true, midIndex};
+        }
+        case AstType::Group: return lower(ast.data.group.childIndex);
+        case AstType::Call: {
+            MidIndex const midIndex{mid_.size()};
+            mid_.pushBack(Mid{.type = MidType::Call, .astIndex = astIndex, .data = {.call = {}}});
+
+            Ast const& target = ast_[ast.data.call.targetIndex];
+            if (target.type != AstType::Identifier)
+            {
+                // FIXME: error, can only call named functions
+                return {false, midIndex};
+            }
+
+            Token const& identToken = tokens_[target.primaryTokenIndex];
+            char const* const identStart = expression_.data() + identToken.offset.value();
+            char const* const identEnd = identStart + identToken.length;
+
+            if (!host_.lookupFunction(dsName{identStart, identEnd}, mid_[midIndex].data.call.functionId, mid_[midIndex].valueType))
+            {
+                // FIXME: error, invalid function
+                return {false, midIndex};
+            }
+
+            bool success = true;
+
+            MidLinkIndex lastLinkIndex = dsInvalidIndex;
+            for (AstLinkIndex linkIndex = ast.data.call.firstArgIndex; linkIndex != dsInvalidIndex;
+                 linkIndex = astLinks_[linkIndex].nextIndex)
+            {
+                auto const [argSuccess, midArgIndex] = lower(astLinks_[linkIndex].childIndex);
+                success &= argSuccess;
+
+                MidLinkIndex midLinkIndex{midLinks_.size()};
+                midLinks_.pushBack(MidLink{.childIndex = midArgIndex});
+
+                if (lastLinkIndex == dsInvalidIndex)
+                    mid_[midIndex].data.call.firstArgIndex = midLinkIndex;
+                else
+                    midLinks_[lastLinkIndex].nextIndex = midLinkIndex;
+
+                lastLinkIndex = midLinkIndex;
+                ++mid_[midIndex].data.call.arity;
+            }
+
+            return {success, midIndex};
+        }
+        default: DS_GUARD_OR(false, MidResult(false, dsInvalidIndex), "Unknown ast node type");
+        }
+    }
+
+    auto dsExpressionCompiler::optimize(MidIndex midIndex) -> MidIndex
+    {
+        switch (mid_[midIndex].type)
+        {
+        case MidType::UnaryOp: {
+            MidIndex childIndex = optimize(mid_[midIndex].data.unary.childIndex);
+
+            // we can only further optimize literals
+            if (mid_[midIndex].type == MidType::Literal)
+            {
+                if (mid_[midIndex].data.unary.op == Operator::Negate && mid_[childIndex].data.literal.type == LiteralType::Integer)
+                {
+                    int64_t const value = mid_[childIndex].data.literal.value.s64;
+
+                    mid_[midIndex].type = MidType::Literal;
+                    mid_[midIndex].data = {.literal = {.type = LiteralType::Integer, .value = {.s64 = -value}}};
+                    return midIndex;
+                }
+
+                if (mid_[midIndex].data.unary.op == Operator::Not && mid_[childIndex].data.literal.type == LiteralType::Boolean)
+                {
+                    bool const value = mid_[childIndex].data.literal.value.b;
+
+                    mid_[midIndex].type = MidType::Literal;
+                    mid_[midIndex].data = {.literal = {.type = LiteralType::Boolean, .value = {.b = !value}}};
+                    return midIndex;
+                }
+            }
+
+            mid_[midIndex].data.unary.childIndex = childIndex;
+            break;
+        }
+        case MidType::BinaryOp: {
+            Operator const op = mid_[midIndex].data.binary.op;
+
+            MidIndex leftChildIndex = optimize(mid_[midIndex].data.binary.leftIndex);
+            MidIndex rightChildIndex = optimize(mid_[midIndex].data.binary.rightIndex);
 
             // we can fold literals for some operators (in all cases, only when operands are the same type -- FIXME: not a good assumption)
-            if (ast_[leftChildIndex].type == AstType::Literal && ast_[rightChildIndex].type == AstType::Literal &&
-                ast_[leftChildIndex].data.literal.type == ast_[rightChildIndex].data.literal.type)
+            if (mid_[leftChildIndex].type == MidType::Literal && mid_[rightChildIndex].type == MidType::Literal &&
+                mid_[leftChildIndex].data.literal.type == mid_[rightChildIndex].data.literal.type)
             {
-                LiteralType const litType = ast_[leftChildIndex].data.literal.type;
+                LiteralType const litType = mid_[leftChildIndex].data.literal.type;
 
                 // arithmetic operations on integers (we don't handle division yet because we're integer-only
                 if (litType == LiteralType::Integer && (op == Operator::Add || op == Operator::Sub || op == Operator::Mul))
                 {
-                    AstIndex const newIndex{ast_.size()};
-                    ast_.pushBack(Ast{.type = AstType::Literal,
-                        .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
+                    MidIndex const newIndex{mid_.size()};
+                    mid_.pushBack(Mid{.type = MidType::Literal,
+                        .astIndex = mid_[midIndex].astIndex,
                         .data = {.literal = {.type = litType, .value = {.s64 = 0}}}});
 
                     // FIXME: handle overflow
-                    switch (ast_[astIndex].data.binary.op)
+                    switch (mid_[midIndex].data.binary.op)
                     {
                     case Operator::Add:
-                        ast_[newIndex].data.literal.value.s64 =
-                            ast_[leftChildIndex].data.literal.value.s64 + ast_[rightChildIndex].data.literal.value.s64;
+                        mid_[newIndex].data.literal.value.s64 =
+                            mid_[leftChildIndex].data.literal.value.s64 + mid_[rightChildIndex].data.literal.value.s64;
                         break;
                     case Operator::Sub:
-                        ast_[newIndex].data.literal.value.s64 =
-                            ast_[leftChildIndex].data.literal.value.s64 - ast_[rightChildIndex].data.literal.value.s64;
+                        mid_[newIndex].data.literal.value.s64 =
+                            mid_[leftChildIndex].data.literal.value.s64 - mid_[rightChildIndex].data.literal.value.s64;
                         break;
                     case Operator::Mul:
-                        ast_[newIndex].data.literal.value.s64 =
-                            ast_[leftChildIndex].data.literal.value.s64 * ast_[rightChildIndex].data.literal.value.s64;
+                        mid_[newIndex].data.literal.value.s64 =
+                            mid_[leftChildIndex].data.literal.value.s64 * mid_[rightChildIndex].data.literal.value.s64;
                         break;
-                    default: DS_GUARD_OR(false, astIndex, "Unexpected operator");
+                    default: DS_GUARD_OR(false, midIndex, "Unexpected operator");
                     }
 
                     return newIndex;
@@ -491,121 +657,46 @@ namespace descript {
                 // logical operations on booleans
                 if (litType == LiteralType::Boolean && (op == Operator::Or || op == Operator::And || op == Operator::Xor))
                 {
-                    AstIndex const newIndex{ast_.size()};
-                    ast_.pushBack(Ast{.type = AstType::Literal,
-                        .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
+                    MidIndex const newIndex{mid_.size()};
+                    mid_.pushBack(Mid{.type = MidType::Literal,
+                        .astIndex = mid_[midIndex].astIndex,
                         .data = {.literal = {.type = litType, .value = {.s64 = 0}}}});
 
                     // FIXME: handle overflow
-                    switch (ast_[astIndex].data.binary.op)
+                    switch (mid_[midIndex].data.binary.op)
                     {
                     case Operator::And:
-                        ast_[newIndex].data.literal.value.b =
-                            ast_[leftChildIndex].data.literal.value.b && ast_[rightChildIndex].data.literal.value.b;
+                        mid_[newIndex].data.literal.value.b =
+                            mid_[leftChildIndex].data.literal.value.b && mid_[rightChildIndex].data.literal.value.b;
                         break;
                     case Operator::Or:
-                        ast_[newIndex].data.literal.value.b =
-                            ast_[leftChildIndex].data.literal.value.b || ast_[rightChildIndex].data.literal.value.b;
+                        mid_[newIndex].data.literal.value.b =
+                            mid_[leftChildIndex].data.literal.value.b || mid_[rightChildIndex].data.literal.value.b;
                         break;
                     case Operator::Xor:
-                        ast_[newIndex].data.literal.value.b =
-                            ast_[leftChildIndex].data.literal.value.b ^ ast_[rightChildIndex].data.literal.value.b;
+                        mid_[newIndex].data.literal.value.b =
+                            mid_[leftChildIndex].data.literal.value.b ^ mid_[rightChildIndex].data.literal.value.b;
                         break;
-                    default: DS_GUARD_OR(false, astIndex, "Unexpected operator");
+                    default: DS_GUARD_OR(false, midIndex, "Unexpected operator");
                     }
 
                     return newIndex;
                 }
             }
 
-            // if either child was optimized, we need to create a new node with
-            // the new child indices
-            if (leftChildIndex != ast_[astIndex].data.binary.leftIndex || rightChildIndex != ast_[astIndex].data.binary.rightIndex)
-            {
-                AstIndex const newIndex{ast_.size()};
-                ast_.pushBack(Ast{.type = AstType::BinaryOp,
-                    .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
-                    .data = {.binary = {.op = ast_[astIndex].data.unary.op, .leftIndex = leftChildIndex, .rightIndex = rightChildIndex}}});
-                return newIndex;
-            }
-
+            mid_[midIndex].data.binary.leftIndex = leftChildIndex;
+            mid_[midIndex].data.binary.rightIndex = rightChildIndex;
             break;
         }
-        case AstType::Group:
-            // not really an "optimization" but it does simplify the AST
-            // for parent optimization analysis
-            return ast_[astIndex].data.group.childIndex;
-        case AstType::Call: {
-            AstIndex newCallIndex = astIndex;
-            AstIndex lastArgIndex = dsInvalidIndex;
+        case MidType::Call: {
+            MidIndex newCallIndex = midIndex;
+            MidIndex lastArgIndex = dsInvalidIndex;
 
-            for (AstIndex argIndex = ast_[astIndex].data.call.firstArgIndex; argIndex != dsInvalidIndex;
-                 argIndex = ast_[argIndex].nextArgIndex)
+            for (MidLinkIndex linkIndex = mid_[midIndex].data.call.firstArgIndex; linkIndex != dsInvalidIndex;
+                 linkIndex = midLinks_[linkIndex].nextIndex)
             {
-                AstIndex newArgIndex = optimize(argIndex);
-
-                // if the child is unmodified, we have nothing further to do
-                if (newArgIndex == argIndex)
-                {
-                    lastArgIndex = argIndex;
-                    continue;
-                }
-
-                // if we're already part of a rewritten call chain, just link in the new arg
-                if (newCallIndex != astIndex)
-                {
-                    if (lastArgIndex != dsInvalidIndex)
-                        ast_[lastArgIndex].nextArgIndex = newArgIndex;
-                    else
-                        ast_[newCallIndex].data.call.firstArgIndex = newArgIndex;
-
-                    lastArgIndex = newArgIndex;
-                    continue;
-                }
-
-                // we'll need to rewrite the call with the new arguments since we have an optimized child
-                newCallIndex = AstIndex{ast_.size()};
-                ast_.pushBack(Ast{.type = AstType::Call,
-                    .primaryTokenIndex = ast_[astIndex].primaryTokenIndex,
-                    .data = {.call = ast_[astIndex].data.call}});
-
-                // if the new child is the _first_ arg, we have it easy, just write the new
-                // first child and we're done
-                if (argIndex == ast_[astIndex].data.call.firstArgIndex)
-                {
-                    ast_[newCallIndex].data.call.firstArgIndex = newArgIndex;
-
-                    lastArgIndex = newArgIndex;
-                    continue;
-                }
-
-                // the new child has some prior siblings which will need to all be rewritten
-                // to form a new linked list
-                {
-                    // first, create the new head node
-                    AstIndex const oldHeadIndex = ast_[astIndex].data.call.firstArgIndex;
-                    AstIndex const newHeadIndex = AstIndex{ast_.size()};
-                    ast_[newCallIndex].data.call.firstArgIndex = newHeadIndex;
-                    ast_.pushBack(ast_[oldHeadIndex]);
-
-                    AstIndex lastRewrittenArgIndex = newHeadIndex;
-
-                    // create new arg nodes for each preceding arg sibling (after the head)
-                    for (AstIndex oldArgIndex = ast_[oldHeadIndex].nextArgIndex; oldArgIndex != argIndex;
-                         oldArgIndex = ast_[oldArgIndex].nextArgIndex)
-                    {
-                        AstIndex const newRewrittenArgIndex{ast_.size()};
-                        ast_.pushBack(ast_[oldArgIndex]);
-                        ast_[lastRewrittenArgIndex].nextArgIndex = newRewrittenArgIndex;
-
-                        lastRewrittenArgIndex = newRewrittenArgIndex;
-                    }
-
-                    // link ourselves in on the new chain
-                    ast_[lastRewrittenArgIndex].nextArgIndex = newArgIndex;
-                }
-
-                lastArgIndex = newArgIndex;
+                MidIndex newArgIndex = optimize(midLinks_[linkIndex].childIndex);
+                midLinks_[linkIndex].childIndex = newArgIndex;
             }
 
             // this might not be "new" but just a copy of the original index
@@ -615,30 +706,30 @@ namespace descript {
         }
 
         // no optimization was performed, so we return our original node
-        return astIndex;
+        return midIndex;
     }
 
-    bool dsExpressionCompiler::generate(AstIndex astIndex, dsExpressionBuilder& builder)
+    bool dsExpressionCompiler::generate(MidIndex midIndex, dsExpressionBuilder& builder) const
     {
-        Ast const& ast = ast_[astIndex];
-        switch (ast.type)
+        Mid const& mid = mid_[midIndex];
+        switch (mid.type)
         {
-        case AstType::Literal:
-            if (ast.data.literal.type == LiteralType::Boolean)
+        case MidType::Literal:
+            if (mid.data.literal.type == LiteralType::Boolean)
             {
-                builder.pushOp((uint8_t)(ast.data.literal.value.b ? dsOpCode::PushTrue : dsOpCode::PushFalse));
+                builder.pushOp((uint8_t)(mid.data.literal.value.b ? dsOpCode::PushTrue : dsOpCode::PushFalse));
                 return true;
             }
 
-            if (ast.data.literal.type == LiteralType::Nil)
+            if (mid.data.literal.type == LiteralType::Nil)
             {
                 builder.pushOp((uint8_t)dsOpCode::PushNil);
                 return true;
             }
 
-            if (ast.data.literal.type == LiteralType::Integer)
+            if (mid.data.literal.type == LiteralType::Integer)
             {
-                int64_t const value = ast.data.literal.value.s64;
+                int64_t const value = mid.data.literal.value.s64;
 
                 switch (value)
                 {
@@ -708,19 +799,8 @@ namespace descript {
             }
 
             DS_GUARD_OR(false, false, "Unexpected literal type");
-        case AstType::Identifier: {
-            Token const& identToken = tokens_[ast.primaryTokenIndex];
-            char const* const identStart = expression_.data() + identToken.offset.value();
-            char const* const identEnd = identStart + identToken.length;
-
-            if (!host_.lookupVariable(dsName{identStart, identEnd}))
-            {
-                // FIXME: error, invalid variable
-                return false;
-            }
-
-            uint64_t const nameHash = dsHashFnv1a64(identStart, identEnd);
-            dsExpressionVariableIndex const index = builder.pushVariable(nameHash);
+        case MidType::Variable: {
+            dsExpressionVariableIndex const index = builder.pushVariable(mid.data.variable.nameHash);
             if (index == dsInvalidIndex)
             {
                 // FIXME: error, variable overflow
@@ -732,12 +812,12 @@ namespace descript {
             builder.pushOp((uint8_t)(index.value() & 0xff));
             return true;
         }
-        case AstType::BinaryOp:
-            if (!generate(ast.data.binary.leftIndex, builder))
+        case MidType::BinaryOp:
+            if (!generate(mid.data.binary.leftIndex, builder))
                 return false;
-            if (!generate(ast.data.binary.rightIndex, builder))
+            if (!generate(mid.data.binary.rightIndex, builder))
                 return false;
-            switch (ast.data.binary.op)
+            switch (mid.data.binary.op)
             {
             case Operator::Add: builder.pushOp((uint8_t)dsOpCode::Add); break;
             case Operator::Sub: builder.pushOp((uint8_t)dsOpCode::Sub); break;
@@ -749,45 +829,25 @@ namespace descript {
             default: DS_GUARD_OR(false, false, "Unknown binary operator type");
             }
             return true;
-        case AstType::UnaryOp:
-            if (!generate(ast.data.unary.childIndex, builder))
+        case MidType::UnaryOp:
+            if (!generate(mid.data.unary.childIndex, builder))
                 return false;
-            switch (ast.data.unary.op)
+            switch (mid.data.unary.op)
             {
             case Operator::Negate: builder.pushOp((uint8_t)dsOpCode::Neg); break;
             case Operator::Not: builder.pushOp((uint8_t)dsOpCode::Not); break;
             default: DS_GUARD_OR(false, false, "Unknown unary operator type");
             }
             return true;
-        case AstType::Group: return generate(ast.data.group.childIndex, builder);
-        case AstType::Call: {
-            uint8_t argc = 0;
-            for (AstIndex argIndex = ast.data.call.firstArgIndex; argIndex != dsInvalidIndex; argIndex = ast_[argIndex].nextArgIndex)
+        case MidType::Call: {
+            for (MidLinkIndex linkIndex = mid.data.call.firstArgIndex; linkIndex != dsInvalidIndex;
+                 linkIndex = midLinks_[linkIndex].nextIndex)
             {
-                ++argc;
-                if (!generate(argIndex, builder))
+                if (!generate(midLinks_[linkIndex].childIndex, builder))
                     return false;
             }
 
-            Ast const& target = ast_[ast.data.call.targetIndex];
-            if (target.type != AstType::Identifier)
-            {
-                // FIXME: error, invalid grammar
-                return false;
-            }
-
-            Token const& targetToken = tokens_[target.primaryTokenIndex];
-            char const* const identStart = expression_.data() + targetToken.offset.value();
-            char const* const identEnd = identStart + targetToken.length;
-
-            dsFunctionId functionId = dsInvalidFunctionId;
-            if (!host_.lookupFunction(dsName{identStart, identEnd}, functionId))
-            {
-                // FIXME: error, invalid function
-                return false;
-            }
-
-            dsExpressionFunctionIndex const index = builder.pushFunction(functionId);
+            dsExpressionFunctionIndex const index = builder.pushFunction(mid.data.call.functionId);
             if (index == dsInvalidIndex)
             {
                 // FIXME: error, function overflow
@@ -797,10 +857,45 @@ namespace descript {
             builder.pushOp((uint8_t)dsOpCode::Call);
             builder.pushOp((uint8_t)(index.value() >> 8));
             builder.pushOp((uint8_t)(index.value() & 0xff));
-            builder.pushOp(argc);
+            builder.pushOp(mid.data.call.arity);
             return true;
         }
         default: DS_GUARD_OR(false, false, "Unknown AST node type");
+        }
+    }
+
+    bool dsExpressionCompiler::isConstant() const noexcept
+    {
+        DS_GUARD_OR(midRoot_ != dsInvalidIndex, false);
+        return mid_[midRoot_].type == MidType::Literal;
+    }
+
+    bool dsExpressionCompiler::isVariableOnly() const noexcept
+    {
+        DS_GUARD_OR(midRoot_ != dsInvalidIndex, false);
+        return mid_[midRoot_].type == MidType::Variable;
+    }
+
+    dsValueType dsExpressionCompiler::resultType() const noexcept
+    {
+        DS_GUARD_OR(midRoot_ != dsInvalidIndex, dsValueType::Nil);
+        return mid_[midRoot_].valueType;
+    }
+
+    bool dsExpressionCompiler::asConstant(dsValue& out_value) const
+    {
+
+        DS_GUARD_OR(midRoot_ != dsInvalidIndex, false);
+
+        if (mid_[midRoot_].type != MidType::Literal)
+            return false;
+
+        switch (mid_[midRoot_].data.literal.type)
+        {
+        case LiteralType::Nil: out_value = nullptr; return true;
+        case LiteralType::Boolean: out_value = mid_[midRoot_].data.literal.value.b; return true;
+        case LiteralType::Integer: out_value = static_cast<double>(mid_[midRoot_].data.literal.value.s64); return true;
+        default: DS_GUARD_OR(false, false, "Unrecognized literal data type");
         }
     }
 } // namespace descript

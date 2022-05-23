@@ -43,7 +43,7 @@ namespace descript {
 
             void addWire(dsNodeId fromNodeId, dsOutputPlugIndex fromPlugIndex, dsNodeId toNodeId, dsInputPlugIndex toPlugIndex) override;
 
-            void addVariable(dsName name) override;
+            void addVariable(dsName name, dsValueType type) override;
 
             void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsName name) override;
             void bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression,
@@ -197,6 +197,7 @@ namespace descript {
                 // source data
                 dsString name;
                 uint64_t nameHash = 0;
+                dsValueType type = dsValueType::Nil;
 
                 // compiled data
                 dsAssemblyVariableIndex index = dsInvalidIndex;
@@ -398,14 +399,14 @@ namespace descript {
         wires_.pushBack(Wire{.fromNodeId = fromNodeId, .toNodeId = toNodeId, .fromPlugIndex = fromPlugIndex, .toPlugIndex = toPlugIndex});
     }
 
-    void GraphCompiler::addVariable(dsName name)
+    void GraphCompiler::addVariable(dsName name, dsValueType type)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
         DS_GUARD_VOID(!dsIsNameEmpty(name));
 
         uint64_t const nameHash = dsHashFnv1a64(name.name, name.nameEnd);
 
-        variables_.pushBack(Variable{.name = dsString(allocator_, name.name, name.nameEnd), .nameHash = nameHash});
+        variables_.pushBack(Variable{.name = dsString(allocator_, name.name, name.nameEnd), .nameHash = nameHash, .type = type});
     }
 
     void GraphCompiler::bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsName name)
@@ -1012,14 +1013,15 @@ namespace descript {
     public:
         explicit ExpressionCompilerHost(GraphCompiler& compiler) noexcept : compiler_(compiler) {}
 
-        bool lookupVariable(dsName name) const noexcept override;
+        bool lookupVariable(dsName name, dsValueType& out_type) const noexcept override;
 
-        bool lookupFunction(dsName name, dsFunctionId& out_functionId) const noexcept override
+        bool lookupFunction(dsName name, dsFunctionId& out_functionId, dsValueType& out_type) const noexcept override
         {
             dsFunctionCompileMeta meta;
             if (!compiler_.host_.lookupFunction(name, meta))
                 return false;
             out_functionId = meta.functionId;
+            out_type = meta.returnType;
             return true;
         }
 
@@ -1344,12 +1346,17 @@ namespace descript {
         return dsExpressionFunctionIndex{index};
     }
 
-    bool GraphCompiler::ExpressionCompilerHost::lookupVariable(dsName name) const noexcept 
+    bool GraphCompiler::ExpressionCompilerHost::lookupVariable(dsName name, dsValueType& out_type) const noexcept 
     {
         uint64_t const nameHash = dsHashFnv1a64(name.name, name.nameEnd);
         for (Variable const& var : compiler_.variables_)
+        {
             if (var.nameHash == nameHash)
+            {
+                out_type = var.type;
                 return true;
+            }
+        }
 
         return false;
     }

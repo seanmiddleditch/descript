@@ -59,6 +59,13 @@ namespace descript {
         CustomInput,
     };
 
+    enum class dsValueType : uint8_t
+    {
+        Nil,
+        Double,
+        Bool,
+    };
+
     struct dsName
     {
         char const* name = nullptr;

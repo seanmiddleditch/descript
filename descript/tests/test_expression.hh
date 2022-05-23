@@ -17,6 +17,7 @@ namespace descript::test::expression {
     struct Function
     {
         char const* name = nullptr;
+        dsValueType returnType = dsValueType::Nil;
         dsFunction function = nullptr;
         void* userData = nullptr;
     };
@@ -28,8 +29,41 @@ namespace descript::test::expression {
     };
 
     std::ostream& operator<<(std::ostream& os, dsValue const& value);
+    std::ostream& operator<<(std::ostream& os, dsValueType type);
 
-    struct Result
+    struct CompileResult
+    {
+        enum class Code
+        {
+            Success,
+            CompileFailed,
+            OptimizeFailed,
+            NotVariableOnly,
+            TypeFailed,
+        } code = Code::Success;
+        dsValueType expected = dsValueType::Nil;
+        dsValueType actual = dsValueType::Nil;
+
+        CompileResult(Code code, dsValueType expected) noexcept : code(code), expected(expected) {}
+        CompileResult(Code code, dsValueType expected, dsValueType actual) noexcept : code(code), expected(expected), actual(actual) {}
+
+        explicit operator bool() const noexcept { return code == Code::Success; }
+
+        friend std::ostream& operator<<(std::ostream& os, CompileResult const& result)
+        {
+            switch (result.code)
+            {
+            case Code::Success: return os << "Success\nExpected: " << result.expected << "\nResult: " << result.actual;
+            case Code::CompileFailed: return os << "Compile Failed\nExpected: " << result.expected;
+            case Code::OptimizeFailed: return os << "Optimize Failed\nExpected: " << result.expected;
+            case Code::NotVariableOnly: return os << "Variable Only Failed\nExpected: " << result.expected;
+            case Code::TypeFailed: return os << "Type Check Failed\nExpected: " << result.expected;
+            default: return os;
+            }
+        }
+    };
+
+    struct RunResult
     {
         enum class Code
         {
@@ -41,29 +75,32 @@ namespace descript::test::expression {
             EvalFailed,
             OptimizedEvalFailed,
             OptimizedResultFailed,
+            NotConstant,
             ResultFailed,
         } code = Code::Success;
         dsValue expected;
         dsValue actual;
 
-        Result(Code code, dsValue const& expected) noexcept : code(code), expected(expected) {}
-        Result(Code code, dsValue const& expected, dsValue const& actual) noexcept : code(code), expected(expected), actual(actual) {}
+        RunResult(Code code, dsValue const& expected) noexcept : code(code), expected(expected) {}
+        RunResult(Code code, dsValue const& expected, dsValue const& actual) noexcept : code(code), expected(expected), actual(actual) {}
 
         explicit operator bool() const noexcept { return code == Code::Success; }
 
-        friend std::ostream& operator<<(std::ostream& os, Result const& result)
+        friend std::ostream& operator<<(std::ostream& os, RunResult const& result)
         {
             switch (result.code)
             {
-            case Result::Code::Success: return os << "Success\nExpected: " << result.expected << "\nResult: " << result.actual;
-            case Result::Code::CompileFailed: return os << "Compile Failed\nExpected: " << result.expected;
-            case Result::Code::OptimizeFailed: return os << "Optimize Failed\nExpected: " << result.expected;
-            case Result::Code::BuildFailed: return os << "Build Failed\nExpected: " << result.expected;
-            case Result::Code::OptimizedBuildFailed: return os << "Build (Optimized) Failed\nExpected: " << result.expected;
-            case Result::Code::EvalFailed: return os << "Eval Failed\nExpected: " << result.expected;
-            case Result::Code::OptimizedEvalFailed: return os << "Eval (Optimized) Failed\nExpected: " << result.expected;
-            case Result::Code::ResultFailed: return os << "Result Failed\nExpected: " << result.expected << "\nResult: " << result.actual;
-            case Result::Code::OptimizedResultFailed: return os << "Result (Optimized) Failed\nExpected: " << result.expected << "\nResult: " << result.actual;
+            case Code::Success: return os << "Success\nExpected: " << result.expected << "\nResult: " << result.actual;
+            case Code::CompileFailed: return os << "Compile Failed\nExpected: " << result.expected;
+            case Code::OptimizeFailed: return os << "Optimize Failed\nExpected: " << result.expected;
+            case Code::BuildFailed: return os << "Build Failed\nExpected: " << result.expected;
+            case Code::OptimizedBuildFailed: return os << "Build (Optimized) Failed\nExpected: " << result.expected;
+            case Code::EvalFailed: return os << "Eval Failed\nExpected: " << result.expected;
+            case Code::OptimizedEvalFailed: return os << "Eval (Optimized) Failed\nExpected: " << result.expected;
+            case Code::ResultFailed: return os << "Result Failed\nExpected: " << result.expected << "\nResult: " << result.actual;
+            case Code::NotConstant: return os << "Not Constant";
+            case Code::OptimizedResultFailed:
+                return os << "Result (Optimized) Failed\nExpected: " << result.expected << "\nResult: " << result.actual;
             default: return os;
             }
         }
@@ -77,13 +114,15 @@ namespace descript::test::expression {
         {
         }
 
-        Result compile(char const* expression, dsValue const& expected);
-        Result compile(char const* expression, double expected) { return compile(expression, dsValue{expected}); }
+        CompileResult compile(char const* expression, dsValueType expectedType);
+        CompileResult variable(char const* expression, dsValueType expectedType);
+        RunResult run(char const* expression, dsValue const& expected);
+        RunResult constant(char const* expression, dsValue const& expected);
 
     protected:
         // dsExpressionCompilerHost
-        bool lookupVariable(dsName name) const noexcept override;
-        bool lookupFunction(dsName name, dsFunctionId& out_functionId) const noexcept override;
+        bool lookupVariable(dsName name, dsValueType& out_type) const noexcept override;
+        bool lookupFunction(dsName name, dsFunctionId& out_functionId, dsValueType& out_type) const noexcept override;
 
         // dsExpressionBuilder
         void pushOp(uint8_t byte) override { byteCode_.pushBack(byte); }
@@ -116,45 +155,98 @@ namespace descript::test::expression {
         }
     }
 
-    Result ExpressionTester::compile(char const* expression, dsValue const& expected)
+    std::ostream& operator<<(std::ostream& os, dsValueType type)
     {
-        uint32_t const byteCodeOffset = byteCode_.size();
+        switch (type)
+        {
+        case dsValueType::Nil: return os << "nil";
+        case dsValueType::Double: return os << "double";
+        case dsValueType::Bool: return os << "bool";
+        default: return os << "unknown";
+        }
+    }
 
+    CompileResult ExpressionTester::compile(char const* expression, dsValueType expectedType)
+    {
         if (!compiler_.compile(expression))
-            return Result{Result::Code::CompileFailed, expected};
+            return CompileResult{CompileResult::Code::CompileFailed, expectedType};
+        if (!compiler_.optimize())
+            return CompileResult{CompileResult::Code::OptimizeFailed, expectedType};
+        return CompileResult{CompileResult::Code::Success, expectedType, compiler_.resultType()};
+    }
+
+    CompileResult ExpressionTester::variable(char const* expression, dsValueType expectedType)
+    {
+        if (!compiler_.compile(expression))
+            return CompileResult{CompileResult::Code::CompileFailed, expectedType};
+        if (!compiler_.optimize())
+            return CompileResult{CompileResult::Code::OptimizeFailed, expectedType};
+        if (!compiler_.isVariableOnly())
+            return CompileResult{CompileResult::Code::NotVariableOnly, expectedType, compiler_.resultType()};
+        return CompileResult{CompileResult::Code::Success, expectedType, compiler_.resultType()};
+    }
+
+    RunResult ExpressionTester::run(char const* expression, dsValue const& expected)
+    {
+        if (!compiler_.compile(expression))
+            return RunResult{RunResult::Code::CompileFailed, expected};
+
+        uint32_t const byteCodeOffset = byteCode_.size();
         if (!compiler_.build(*this))
-            return Result{Result::Code::BuildFailed, expected};
+            return RunResult{RunResult::Code::BuildFailed, expected};
         dsValue result;
         if (!dsEvaluate(*this, byteCode_.data() + byteCodeOffset, byteCode_.size() - byteCodeOffset, result))
-            return Result{Result::Code::EvalFailed, expected};
+            return RunResult{RunResult::Code::EvalFailed, expected};
         if (result != expected)
-            return Result{Result::Code::ResultFailed, expected, result};
+            return RunResult{RunResult::Code::ResultFailed, expected, result};
 
         uint32_t const optimizedByteCodeOffset = byteCode_.size();
 
         if (!compiler_.optimize())
-            return Result{Result::Code::OptimizeFailed, expected};
+            return RunResult{RunResult::Code::OptimizeFailed, expected};
         if (!compiler_.build(*this))
-            return Result{Result::Code::OptimizedBuildFailed, expected};
+            return RunResult{RunResult::Code::OptimizedBuildFailed, expected};
         dsValue optimizedResult;
         if (!dsEvaluate(*this, byteCode_.data() + optimizedByteCodeOffset, byteCode_.size() - optimizedByteCodeOffset, optimizedResult))
-            return Result{Result::Code::OptimizedEvalFailed, expected};
+            return RunResult{RunResult::Code::OptimizedEvalFailed, expected};
         if (optimizedResult != expected)
-            return Result{Result::Code::OptimizedResultFailed, expected, optimizedResult};
+            return RunResult{RunResult::Code::OptimizedResultFailed, expected, optimizedResult};
 
-        return Result{Result::Code::Success, expected, result};
+        return RunResult{RunResult::Code::Success, expected, result};
     };
 
-    bool ExpressionTester::lookupVariable(dsName name) const noexcept
+    RunResult ExpressionTester::constant(char const* expression, dsValue const& expected)
+    {
+        if (!compiler_.compile(expression))
+            return RunResult{RunResult::Code::CompileFailed, expected};
+        if (!compiler_.optimize())
+            return RunResult{RunResult::Code::OptimizeFailed, expected};
+
+        dsValue actual;
+        if (!compiler_.asConstant(actual))
+            return RunResult{RunResult::Code::NotConstant, expected};
+
+        if (actual != expected)
+            return RunResult{RunResult::Code::ResultFailed, expected, actual};
+
+        return RunResult{RunResult::Code::Success, expected, actual};
+    };
+
+    bool ExpressionTester::lookupVariable(dsName name, dsValueType& out_type) const noexcept
     {
         uint32_t const variableLen = dsNameLen(name);
         for (Variable const& variable : variables_)
+        {
             if (variableLen == std::strlen(variable.name) && std::strncmp(name.name, variable.name, variableLen) == 0)
+            {
+                out_type = variable.value.type();
                 return true;
+            }
+        }
         return false;
     }
 
-    bool ExpressionTester::lookupFunction(dsName name, dsFunctionId& out_functionId) const noexcept
+    bool ExpressionTester::lookupFunction(dsName name, dsFunctionId& out_functionId, dsValueType& out_type) const noexcept
     {
         uint32_t const functionLen = dsNameLen(name);
         uint32_t nextFunctionId = 0;
@@ -163,6 +255,7 @@ namespace descript::test::expression {
             if (functionLen == std::strlen(function.name) && std::strncmp(name.name, function.name, functionLen) == 0)
             {
                 out_functionId = dsFunctionId{nextFunctionId};
+                out_type = function.returnType;
                 return true;
             }
             ++nextFunctionId;

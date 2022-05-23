@@ -6,6 +6,8 @@
 
 #include "catch_amalgamated.hpp"
 
+#include <exception>
+
 namespace descript::test {
     class LeakTestAllocator final : public descript::dsAllocator
     {
@@ -23,8 +25,11 @@ namespace descript::test {
 
     LeakTestAllocator::~LeakTestAllocator()
     {
-        CHECK(blocks_ == 0);
-        CHECK(bytes_ == 0);
+        if (std::uncaught_exceptions() == 0)
+        {
+            CHECK(blocks_ == 0);
+            CHECK(bytes_ == 0);
+        }
     }
 
     void* LeakTestAllocator::allocate(uint32_t size, uint32_t alignment)

@@ -4,22 +4,16 @@
 
 #include <cstdint>
 
+#include "descript/types.hh"
+
 namespace descript {
-
-    enum class dsValueType : uint8_t
-    {
-        Nil,
-        Double,
-        Bool,
-    };
-
     class dsValue final
     {
     public:
         constexpr dsValue() noexcept = default;
-        constexpr explicit dsValue(double val) noexcept : data_{.f64 = val}, type_{dsValueType::Double} {}
-        constexpr explicit dsValue(bool val) noexcept : data_{.b = val}, type_{dsValueType::Bool} {}
-        constexpr explicit dsValue(decltype(nullptr)) noexcept : type_{dsValueType::Nil} {}
+        constexpr /*implicit*/ dsValue(double val) noexcept : data_{.f64 = val}, type_{dsValueType::Double} {}
+        constexpr /*implicit*/ dsValue(bool val) noexcept : data_{.b = val}, type_{dsValueType::Bool} {}
+        constexpr /*implicit*/ dsValue(decltype(nullptr)) noexcept : type_{dsValueType::Nil} {}
         template <typename T>
         dsValue(T const&) = delete;
 

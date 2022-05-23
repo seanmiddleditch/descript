@@ -44,6 +44,7 @@ namespace descript {
     {
         char const* name = nullptr;
         dsFunctionId functionId = dsInvalidFunctionId;
+        dsValueType returnType = dsValueType::Nil;
     };
 
     class dsCompilerHost
@@ -75,7 +76,7 @@ namespace descript {
 
         virtual void addWire(dsNodeId fromNodeId, dsOutputPlugIndex fromPlugIndex, dsNodeId toNodeId, dsInputPlugIndex toPlugIndex) = 0;
 
-        virtual void addVariable(dsName name) = 0;
+        virtual void addVariable(dsName name, dsValueType type) = 0;
 
         virtual void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsName name) = 0;
         virtual void bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression,

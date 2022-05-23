@@ -187,9 +187,9 @@ namespace {
     };
 
     static constexpr dsFunctionCompileMeta functions[] = {
-        {.name = "series", .functionId = dsFunctionId{0}},
-        {.name = "readFlag", .functionId = dsFunctionId{1}},
-        {.name = "readFlagNum", .functionId = dsFunctionId{2}},
+        {.name = "series", .functionId = dsFunctionId{0}, .returnType = dsValueType::Double},
+        {.name = "readFlag", .functionId = dsFunctionId{1}, .returnType = dsValueType::Bool},
+        {.name = "readFlagNum", .functionId = dsFunctionId{2}, .returnType = dsValueType::Double},
     };
 
     class TestCompilerHost final : public dsCompilerHost
@@ -227,7 +227,7 @@ namespace {
 
         void onError(dsCompileError const& error) override
         {
-            INFO(static_cast<int>(error.code));
+            WARN(static_cast<int>(error.code));
             errors_.pushBack(error);
         }
 
@@ -349,9 +349,9 @@ TEST_CASE("Graph Compiler", "[runtime]")
     constexpr dsNodeId setResultNodeId{1790};
     constexpr dsNodeId setIncrementNodeId{2000};
 
-    compiler->addVariable(dsName{"Count"});
-    compiler->addVariable(dsName{"Result"});
-    compiler->addVariable(dsName{"Increment"});
+    compiler->addVariable(dsName{"Count"}, dsValueType::Double);
+    compiler->addVariable(dsName{"Result"}, dsValueType::Double);
+    compiler->addVariable(dsName{"Increment"}, dsValueType::Double);
 
     compiler->beginNode(entryNodeId, entryNodeTypeId);
     {
