@@ -15,6 +15,7 @@ add_library(descript
     "source/assembly_internal.hh"
     "source/assembly.cpp"
     "source/assert.hh"
+    "source/bit.hh"
     "source/compiler.cpp"
     "source/expression_compiler.cpp"
     "source/expression_compiler.hh"

@@ -17,16 +17,16 @@ TEST_CASE("Virtual Machine", "[vm]")
     using namespace descript::test::expression;
 
     static constexpr Variable variables[] = {
-        Variable{"Seven", dsValue{7.0}},
-        Variable{"Eleven", dsValue{11.0}},
+        Variable{"Seven", dsValue{7}},
+        Variable{"Eleven", dsValue{11}},
     };
 
     static constexpr Function functions[] = {
-        Function{"Add", dsValueType::Double,
+        Function{"Add", dsValueType::Int32,
             [](dsFunctionContext& ctx, void* userData) -> dsValue {
-                double result = 0.0;
+                int32_t result = 0;
                 for (uint32_t i = 0; i != ctx.argc(); ++i)
-                    result += ctx.argAt(i).as<double>();
+                    result += ctx.argAt(i).as<int32_t>();
                 return result;
             }},
     };
@@ -39,24 +39,24 @@ TEST_CASE("Virtual Machine", "[vm]")
         CHECK(tester.run("True", true));
         CHECK(tester.run("False", false));
         CHECK(tester.run("Nil", nullptr));
-        CHECK(tester.run("0", 0.0));
-        CHECK(tester.run("10", 10.0));
-        CHECK(tester.run("1000", 1'000.0));
-        CHECK(tester.run("1000000", 1'000'000.0));
+        CHECK(tester.run("0", 0));
+        CHECK(tester.run("10", 10));
+        CHECK(tester.run("1000", 1'000));
+        CHECK(tester.run("1000000", 1'000'000));
     }
 
     SECTION("Negate")
     {
-        CHECK(tester.run("-42", -42.0));
-        CHECK(tester.run("--42", 42.0));
+        CHECK(tester.run("-42", -42));
+        CHECK(tester.run("--42", 42));
     }
 
     SECTION("Binary Arithmetic")
     {
-        CHECK(tester.run("1 + 17", 18.0));
-        CHECK(tester.run("-2 * 3", -6.0));
-        CHECK(tester.run("0 - 3", -3.0));
-        CHECK(tester.run("1 / 2", 0.5));
+        CHECK(tester.run("1 + 17", 18));
+        CHECK(tester.run("-2 * 3", -6));
+        CHECK(tester.run("0 - 3", -3));
+        CHECK(tester.run("1 / 2", 0));
     }
 
     SECTION("Logical")
@@ -70,45 +70,45 @@ TEST_CASE("Virtual Machine", "[vm]")
 
     SECTION("Precedence")
     {
-        CHECK(tester.run("2 + 3 * 4", 14.0));
-        CHECK(tester.run("(2 + 3) * 4", 20.0));
-        CHECK(tester.run("2 - 3 + 4", 3.0));
-        CHECK(tester.run("2 + 3 - 4", 1.0));
-        CHECK(tester.run("10 + 2 * -3 - (1 + 1)", 2.0));
+        CHECK(tester.run("2 + 3 * 4", 14));
+        CHECK(tester.run("(2 + 3) * 4", 20));
+        CHECK(tester.run("2 - 3 + 4", 3));
+        CHECK(tester.run("2 + 3 - 4", 1));
+        CHECK(tester.run("10 + 2 * -3 - (1 + 1)", 2));
     }
 
     SECTION("Variable")
     {
-        CHECK(tester.run("Seven", 7.0));
-        CHECK(tester.run("-Eleven", -11.0));
-        CHECK(tester.run("Seven + Eleven", 18.0));
-        CHECK(tester.run("Seven + 1", 8.0));
+        CHECK(tester.run("Seven", 7));
+        CHECK(tester.run("-Eleven", -11));
+        CHECK(tester.run("Seven + Eleven", 18));
+        CHECK(tester.run("Seven + 1", 8));
     }
 
     SECTION("Call")
     {
-        CHECK(tester.run("Add()", 0.0));
-        CHECK(tester.run("Add(1)", 1.0));
-        CHECK(tester.run("-Add(1, 1)", -2.0));
-        CHECK(tester.run("Add(1) + 1", 2.0));
-        CHECK(tester.run("Add(1, 1) * Add(2, 3)", 10.0));
-        CHECK(tester.run("Add(1, Add(2, 3), -2)", 4.0));
-        CHECK(tester.run("Add(17, 99 - 50) + -42", 24.0));
-        CHECK(tester.run("Add(Seven, 0, Eleven)", 18.0));
+        CHECK(tester.run("Add()", 0));
+        CHECK(tester.run("Add(1)", 1));
+        CHECK(tester.run("-Add(1, 1)", -2));
+        CHECK(tester.run("Add(1) + 1", 2));
+        CHECK(tester.run("Add(1, 1) * Add(2, 3)", 10));
+        CHECK(tester.run("Add(1, Add(2, 3), -2)", 4));
+        CHECK(tester.run("Add(17, 99 - 50) + -42", 24));
+        CHECK(tester.run("Add(Seven, 0, Eleven)", 18));
     }
 
     SECTION("Type errors") { CHECK_FALSE(tester.compile("1 + true", {})); }
 
     SECTION("Constant optimization")
     {
-        CHECK(tester.constant("10", 10.0));
-        CHECK(tester.constant("(10 + 10)", 20.0));
+        CHECK(tester.constant("10", 10));
+        CHECK(tester.constant("(10 + 10)", 20));
         CHECK(tester.constant("true or false", true));
-        CHECK_FALSE(tester.constant("Seven", 7.0));
+        CHECK_FALSE(tester.constant("Seven", 7));
     }
 
     SECTION("Only variable") {
-        CHECK(tester.variable("Seven", dsValueType::Double));
-        CHECK_FALSE(tester.variable("7", dsValueType::Double));
+        CHECK(tester.variable("Seven", dsValueType::Float32));
+        CHECK_FALSE(tester.variable("7", dsValueType::Float32));
     }
 }

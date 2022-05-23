@@ -9,6 +9,7 @@
 #include "array.hh"
 #include "assembly_internal.hh"
 #include "assert.hh"
+#include "bit.hh"
 #include "expression_compiler.hh"
 #include "fnv.hh"
 #include "index.hh"
@@ -691,17 +692,15 @@ namespace descript {
         for (auto&& [index, value] : dsEnumerate(constants_))
         {
             dsAssemblyConstant& outConst = header->constants[dsAssemblyConstantIndex{index}];
+            outConst.type = value.type();
             outConst.serialized = 0;
 
             switch (value.type())
             {
-            case dsValueType::Double: {
-                double const raw = value.as<double>();
-                static_assert(sizeof(raw) == sizeof(outConst.serialized));
-                std::memcpy(&outConst.serialized, &raw, sizeof(double));
-                break;
-            }
-            default: break;
+            case dsValueType::Nil: break;
+            case dsValueType::Int32: outConst.serialized = dsBitCast<uint32_t>(value.as<int32_t>()); break;
+            case dsValueType::Float32: outConst.serialized = dsBitCast<uint32_t>(value.as<float>()); break;
+            default: DS_GUARD_OR(false, false, "Unknown value type");
             }
         }
 
@@ -1084,21 +1083,29 @@ namespace descript {
                 DS_ASSERT(binding.variableIndex == dsInvalidIndex);
 
                 Expression& expression = expressions_[binding.expressionIndex];
-                expression.live = true;
-
 
                 builder.bindSlot(binding.compiledSlotIndex);
                 if (!compiler.compile(expression.expression.cStr()))
+                {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
+                    continue;
+                }
 
                 if (!compiler.optimize())
+                {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
+                    continue;
+                }
 
                 expression.byteCodeStart = dsAssemblyByteCodeIndex{byteCode_.size()};
 
                 if (!compiler.build(builder))
+                {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
+                    continue;
+                }
 
+                expression.live = true;
                 expression.byteCodeCount = byteCode_.size() - expression.byteCodeStart.value();
             }
         }
@@ -1346,7 +1353,7 @@ namespace descript {
         return dsExpressionFunctionIndex{index};
     }
 
-    bool GraphCompiler::ExpressionCompilerHost::lookupVariable(dsName name, dsValueType& out_type) const noexcept 
+    bool GraphCompiler::ExpressionCompilerHost::lookupVariable(dsName name, dsValueType& out_type) const noexcept
     {
         uint64_t const nameHash = dsHashFnv1a64(name.name, name.nameEnd);
         for (Variable const& var : compiler_.variables_)

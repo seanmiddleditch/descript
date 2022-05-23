@@ -96,19 +96,19 @@ namespace {
         {
             dsValue value;
             if (!ctx.readSlot(counterSlot, value))
-                value = dsValue{0.0};
+                value = dsValue{0};
             if (!ctx.readSlot(incrementSlot, increment_))
-                increment_ = dsValue{0.0};
+                increment_ = dsValue{0};
 
-            ctx.writeSlot(counterSlot, dsValue{value.as<double>() + increment_.as<double>()});
+            ctx.writeSlot(counterSlot, dsValue{value.as<int32_t>() + increment_.as<int32_t>()});
         }
 
         void onDeactivate(dsContext& ctx) override
         {
             dsValue value;
             if (!ctx.readSlot(counterSlot, value))
-                value = dsValue{0.0};
-            ctx.writeSlot(counterSlot, dsValue{value.as<double>() - increment_.as<double>()});
+                value = dsValue{0};
+            ctx.writeSlot(counterSlot, dsValue{value.as<int32_t>() - increment_.as<int32_t>()});
         }
 
     private:
@@ -187,9 +187,9 @@ namespace {
     };
 
     static constexpr dsFunctionCompileMeta functions[] = {
-        {.name = "series", .functionId = dsFunctionId{0}, .returnType = dsValueType::Double},
+        {.name = "series", .functionId = dsFunctionId{0}, .returnType = dsValueType::Int32},
         {.name = "readFlag", .functionId = dsFunctionId{1}, .returnType = dsValueType::Bool},
-        {.name = "readFlagNum", .functionId = dsFunctionId{2}, .returnType = dsValueType::Double},
+        {.name = "readFlagNum", .functionId = dsFunctionId{2}, .returnType = dsValueType::Int32},
     };
 
     class TestCompilerHost final : public dsCompilerHost
@@ -298,9 +298,9 @@ namespace {
 
     static dsValue series(dsFunctionContext& ctx, void* userData)
     {
-        double result = 1.0;
+        int32_t result = 1;
         for (uint32_t index = 0; index != ctx.argc(); ++index)
-            result *= ctx.argAt(index).as<double>();
+            result *= ctx.argAt(index).as<int32_t>();
         return dsValue{result};
     }
 
@@ -313,7 +313,7 @@ namespace {
     static dsValue readFlagNum(dsFunctionContext& ctx, void* userData)
     {
         ctx.listen(flagEmitterId);
-        return dsValue{flagValue ? 1.0 : 0.0};
+        return dsValue{flagValue ? 1 : 0};
     }
 } // namespace
 
@@ -349,9 +349,9 @@ TEST_CASE("Graph Compiler", "[runtime]")
     constexpr dsNodeId setResultNodeId{1790};
     constexpr dsNodeId setIncrementNodeId{2000};
 
-    compiler->addVariable(dsName{"Count"}, dsValueType::Double);
-    compiler->addVariable(dsName{"Result"}, dsValueType::Double);
-    compiler->addVariable(dsName{"Increment"}, dsValueType::Double);
+    compiler->addVariable(dsName{"Count"}, dsValueType::Int32);
+    compiler->addVariable(dsName{"Result"}, dsValueType::Int32);
+    compiler->addVariable(dsName{"Increment"}, dsValueType::Int32);
 
     compiler->beginNode(entryNodeId, entryNodeTypeId);
     {
@@ -437,8 +437,8 @@ TEST_CASE("Graph Compiler", "[runtime]")
     REQUIRE(assembly != nullptr);
 
     dsParam const params[] = {
-        {.name = dsName{"Count"}, .value = 0.0},
-        {.name = dsName{"Increment"}, .value = 0.0},
+        {.name = dsName{"Count"}, .value = 0},
+        {.name = dsName{"Increment"}, .value = 0},
     };
 
     flagValue = true;
@@ -454,43 +454,43 @@ TEST_CASE("Graph Compiler", "[runtime]")
         dsValue value;
         if (!runtime->readVariable(instanceId, dsName{variable}, value))
             return false;
-        if (!value.is<double>())
+        if (!value.is<int32_t>())
             return false;
-        return value.as<double>();
+        return value.as<int32_t>();
     };
 
     runtime->processEvents();
 
-    CHECK(readVar("Count") == 5.0);
-    CHECK(readVar("Result") == 10.0);
-    CHECK(readVar("Increment") == 1.0);
+    CHECK(readVar("Count") == 5);
+    CHECK(readVar("Result") == 10);
+    CHECK(readVar("Increment") == 1);
     CHECK_FALSE(canaryValue);
 
     flagValue = false;
     runtime->notifyChange(flagEmitterId);
     runtime->processEvents();
 
-    CHECK(readVar("Count") == 0.0);
-    CHECK(readVar("Result") == 0.0);
-    CHECK(readVar("Increment") == 1.0);
+    CHECK(readVar("Count") == 0);
+    CHECK(readVar("Result") == 0);
+    CHECK(readVar("Increment") == 1);
     CHECK(canaryValue);
 
     flagValue = true;
     runtime->notifyChange(flagEmitterId);
     runtime->processEvents();
 
-    CHECK(readVar("Count") == 5.0);
-    CHECK(readVar("Result") == 10.0);
-    CHECK(readVar("Increment") == 2.0);
+    CHECK(readVar("Count") == 5);
+    CHECK(readVar("Result") == 10);
+    CHECK(readVar("Increment") == 2);
     CHECK_FALSE(canaryValue);
 
     flagValue = false;
     runtime->notifyChange(flagEmitterId);
     runtime->processEvents();
 
-    CHECK(readVar("Count") == 0.0);
-    CHECK(readVar("Result") == 0.0);
-    CHECK(readVar("Increment") == 2.0);
+    CHECK(readVar("Count") == 0);
+    CHECK(readVar("Result") == 0);
+    CHECK(readVar("Increment") == 2);
     CHECK(canaryValue);
 
     runtime->destroyInstance(instanceId);

@@ -33,14 +33,24 @@ namespace descript {
             dsValue default_;
         };
 
+        template <typename T>
+        constexpr bool IsArithmetic =
+            std::conjunction_v<std::is_scalar<T>, std::negation<std::is_enum<T>>, std::negation<std::is_same<T, bool>>>;
+
+        static_assert(IsArithmetic<int>);
+        static_assert(IsArithmetic<float>);
+        static_assert(!IsArithmetic<bool>);
+        static_assert(!IsArithmetic<dsValueType>);
+
         struct Neg
         {
-            static constexpr double apply(double val) noexcept { return -val; }
+            template <typename T>
+            requires IsArithmetic<T>
+            static constexpr T apply(T val) noexcept { return -val; }
         };
 
         struct Not
         {
-            static constexpr double apply(double val) noexcept { return !val; }
             static constexpr bool apply(bool val) noexcept { return !val; }
         };
 
@@ -61,33 +71,68 @@ namespace descript {
 
         struct Add
         {
-            static constexpr double apply(double left, double right) noexcept { return left + right; }
+            template <typename T>
+            requires IsArithmetic<T>
+            static constexpr T apply(T left, T right) noexcept { return left + right; }
         };
 
         struct Sub
         {
-            static constexpr double apply(double left, double right) noexcept { return left - right; }
+            template <typename T>
+            requires IsArithmetic<T>
+            static constexpr T apply(T left, T right) noexcept { return left - right; }
         };
 
         struct Mul
         {
-            static constexpr double apply(double left, double right) noexcept { return left * right; }
+            template <typename T>
+            requires IsArithmetic<T>
+            static constexpr T apply(T left, T right) noexcept { return left * right; }
         };
 
         struct Div
         {
-            static constexpr double apply(double left, double right) noexcept { return left / right; }
+            template <typename T>
+            requires IsArithmetic<T>
+            static constexpr T apply(T left, T right) noexcept { return right != T{0} ? left / right : T{0}; }
         };
+
+        template <typename Op, typename... T>
+        constexpr bool IsApplicable = requires(T const&... args)
+        {
+            Op::apply(args...);
+        };
+
+        static_assert(IsApplicable<Add, int, int>);
+
+        template <typename Op, typename T>
+        constexpr dsValue apply(T const& val) noexcept
+        {
+            if constexpr (IsApplicable<Op, T>)
+                return dsValue{Op::apply(val)};
+            else
+                return nullptr;
+        }
 
         template <typename Op>
         constexpr dsValue apply(dsValue const& val) noexcept
         {
             switch (val.type())
             {
-            case dsValueType::Double: return dsValue{Op::apply(val.as<double>())};
-            case dsValueType::Bool: return dsValue{Op::apply(val.as<bool>())};
+            case dsValueType::Int32: return apply<Op>(val.as<int32_t>());
+            case dsValueType::Float32: return apply<Op>(val.as<float>());
+            case dsValueType::Bool: return apply<Op>(val.as<bool>());
             default: return dsValue{};
             }
+        }
+
+        template <typename Op, typename T, typename U>
+        constexpr dsValue apply(T const& left, U const& right) noexcept
+        {
+            if constexpr (IsApplicable<Op, T, U>)
+                return dsValue{Op::apply(left, right)};
+            else
+                return nullptr;
         }
 
         // note: left/right are swapped because we pop the right before the left
@@ -99,8 +144,9 @@ namespace descript {
 
             switch (left.type())
             {
-            case dsValueType::Double: return dsValue{Op::apply(left.as<double>(), right.as<double>())};
-            case dsValueType::Bool: return dsValue{Op::apply(left.as<bool>(), right.as<bool>())};
+            case dsValueType::Int32: return apply<Op>(left.as<int32_t>(), right.as<int32_t>());
+            case dsValueType::Float32: return apply<Op>(left.as<float>(), right.as<float>());
+            case dsValueType::Bool: return apply<Op>(left.as<bool>(), right.as<bool>());
             default: return dsValue{};
             }
         }
@@ -149,19 +195,19 @@ namespace descript {
             case dsOpCode::PushTrue: DS_PUSH(dsValue{true}); break;
             case dsOpCode::PushFalse: DS_PUSH(dsValue{false}); break;
             case dsOpCode::PushNil: DS_PUSH(dsValue{nullptr}); break;
-            case dsOpCode::Push0: DS_PUSH(dsValue{0.0}); break;
-            case dsOpCode::Push1: DS_PUSH(dsValue{1.0}); break;
-            case dsOpCode::Push2: DS_PUSH(dsValue{2.0}); break;
-            case dsOpCode::PushNeg1: DS_PUSH(dsValue{-1.0}); break;
+            case dsOpCode::Push0: DS_PUSH(dsValue{0}); break;
+            case dsOpCode::Push1: DS_PUSH(dsValue{1}); break;
+            case dsOpCode::Push2: DS_PUSH(dsValue{2}); break;
+            case dsOpCode::PushNeg1: DS_PUSH(dsValue{-1}); break;
             case dsOpCode::PushS8:
                 if (++ip == opsEnd)
                     return false;
-                DS_PUSH(dsValue{static_cast<double>(static_cast<int8_t>(*ip))});
+                DS_PUSH(dsValue{static_cast<int32_t>(static_cast<int8_t>(*ip))});
                 break;
             case dsOpCode::PushU8:
                 if (++ip == opsEnd)
                     return false;
-                DS_PUSH(dsValue{static_cast<double>(*ip)});
+                DS_PUSH(dsValue{static_cast<int32_t>(*ip)});
                 break;
             case dsOpCode::PushS16: {
                 if (++ip == opsEnd)
@@ -170,7 +216,7 @@ namespace descript {
                 if (++ip == opsEnd)
                     return false;
                 value |= *ip;
-                DS_PUSH(dsValue{static_cast<double>(static_cast<int16_t>(value))});
+                DS_PUSH(dsValue{static_cast<int32_t>(static_cast<int16_t>(value))});
                 break;
             }
             case dsOpCode::PushU16: {
@@ -180,7 +226,7 @@ namespace descript {
                 if (++ip == opsEnd)
                     return false;
                 value |= *ip;
-                DS_PUSH(dsValue{static_cast<double>(value)});
+                DS_PUSH(dsValue{static_cast<int32_t>(value)});
                 break;
             }
             case dsOpCode::PushConstant: {

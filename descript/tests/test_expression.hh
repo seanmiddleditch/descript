@@ -149,7 +149,8 @@ namespace descript::test::expression {
         switch (value.type())
         {
         case dsValueType::Nil: return os << "nil";
-        case dsValueType::Double: return os << "double(" << value.as<double>() << ')';
+        case dsValueType::Int32: return os << "int32(" << value.as<int32_t>() << ')';
+        case dsValueType::Float32: return os << "float32(" << value.as<float>() << ')';
         case dsValueType::Bool: return os << (value.as<bool>() ? "true" : "false");
         default: return os << "unknown(???)";
         }
@@ -160,7 +161,8 @@ namespace descript::test::expression {
         switch (type)
         {
         case dsValueType::Nil: return os << "nil";
-        case dsValueType::Double: return os << "double";
+        case dsValueType::Int32: return os << "int32";
+        case dsValueType::Float32: return os << "float32";
         case dsValueType::Bool: return os << "bool";
         default: return os << "unknown";
         }

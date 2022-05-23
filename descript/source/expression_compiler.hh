@@ -160,6 +160,7 @@ namespace descript {
                 {
                     bool bool_ = false;
                     int64_t int64_;
+                    double float64_;
                 } constant;
                 struct Variable
                 {

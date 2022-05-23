@@ -11,7 +11,8 @@ namespace descript {
     {
     public:
         constexpr dsValue() noexcept = default;
-        constexpr /*implicit*/ dsValue(double val) noexcept : data_{.f64 = val}, type_{dsValueType::Double} {}
+        constexpr /*implicit*/ dsValue(float val) noexcept : data_{.f32 = val}, type_{dsValueType::Float32} {}
+        constexpr /*implicit*/ dsValue(int32_t val) noexcept : data_{.i32 = val}, type_{dsValueType::Int32} {}
         constexpr /*implicit*/ dsValue(bool val) noexcept : data_{.b = val}, type_{dsValueType::Bool} {}
         constexpr /*implicit*/ dsValue(decltype(nullptr)) noexcept : type_{dsValueType::Nil} {}
         template <typename T>
@@ -29,7 +30,8 @@ namespace descript {
 
     private:
         union {
-            double f64 = 0.0;
+            float f32 = 0.0;
+            int32_t i32;
             bool b;
         } data_;
         dsValueType type_ = dsValueType::Nil;
@@ -39,10 +41,17 @@ namespace descript {
     };
 
     template <>
-    struct dsValue::CastHelper<double>
+    struct dsValue::CastHelper<float>
     {
-        static constexpr bool is(dsValue const& val) noexcept { return val.type_ == dsValueType::Double; }
-        static constexpr double as(dsValue const& val) noexcept { return val.data_.f64; }
+        static constexpr bool is(dsValue const& val) noexcept { return val.type_ == dsValueType::Float32; }
+        static constexpr double as(dsValue const& val) noexcept { return val.data_.f32; }
+    };
+
+        template <>
+    struct dsValue::CastHelper<int32_t>
+    {
+        static constexpr bool is(dsValue const& val) noexcept { return val.type_ == dsValueType::Int32; }
+        static constexpr int32_t as(dsValue const& val) noexcept { return val.data_.i32; }
     };
 
     template <>
@@ -72,7 +81,8 @@ namespace descript {
         switch (type_)
         {
         case dsValueType::Nil: return true; // nil == nil
-        case dsValueType::Double: return data_.f64 == right.data_.f64;
+        case dsValueType::Int32: return data_.i32 == right.data_.i32;
+        case dsValueType::Float32: return data_.f32 == right.data_.f32;
         case dsValueType::Bool: return data_.b == right.data_.b;
         default: return false; // unknown type
         }

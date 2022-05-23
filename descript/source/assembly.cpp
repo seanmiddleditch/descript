@@ -7,6 +7,7 @@
 
 #include "assembly_internal.hh"
 
+#include "bit.hh"
 #include "fnv.hh"
 #include "instance.hh"
 
@@ -178,11 +179,13 @@ namespace descript {
         {
             dsAssemblyConstant const& serialized = header.constants[constantIndex];
 
-            double deserialized = 0.0;
-            static_assert(sizeof(deserialized) == sizeof(serialized.serialized));
-
-            std::memcpy(&deserialized, &serialized.serialized, sizeof(deserialized));
-            assembly->constants[constantIndex] = dsValue{deserialized};
+            dsValue& deserialized = assembly->constants[constantIndex];
+            switch (serialized.type)
+            {
+            case dsValueType::Nil: deserialized = nullptr; break;
+            case dsValueType::Int32: deserialized = dsBitCast<int32_t>(static_cast<uint32_t>(serialized.serialized)); break;
+            case dsValueType::Float32: deserialized = dsBitCast<float>(static_cast<uint32_t>(serialized.serialized)); break;
+            }
         }
 
         // fill function implementations

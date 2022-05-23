@@ -444,7 +444,7 @@ namespace descript {
                 return {true, astIndex};
             case TokenType::LiteralInt:
                 ast.type = AstType::Constant;
-                ast.valueType = dsValueType::Double;
+                ast.valueType = dsValueType::Int32;
                 ast.data.constant = {.int64_ = tokens_[ast.primaryTokenIndex].data.literalInt};
                 return {true, astIndex};
             default: DS_GUARD_OR(false, LowerResult(false, astIndex), "Unknown literal token type");
@@ -460,8 +460,8 @@ namespace descript {
             switch (ast.data.unary.op)
             {
             case Operator::Negate:
-                ast.valueType = dsValueType::Double;
-                if (ast_[operandIndex].valueType != dsValueType::Double)
+                ast.valueType = ast_[operandIndex].valueType;
+                if (ast.valueType != dsValueType::Int32 && ast.valueType != dsValueType::Float32)
                     return {false, astIndex}; // FIXME: error on type
                 return {success, astIndex};
             case Operator::Not:
@@ -492,15 +492,15 @@ namespace descript {
             case Operator::Sub:
             case Operator::Mul:
             case Operator::Div:
-                ast.valueType = dsValueType::Double;
-                if (ast_[leftIndex].valueType != dsValueType::Double)
+                ast.valueType = ast_[leftIndex].valueType;
+                if (ast.valueType != dsValueType::Float32 && ast.valueType != dsValueType::Int32)
                     return {false, astIndex}; // FIXME: error on type
                 return {success, astIndex};
             case Operator::And:
             case Operator::Or:
             case Operator::Xor:
                 ast.valueType = dsValueType::Bool;
-                if (ast_[leftIndex].valueType != dsValueType::Bool)
+                if (ast.valueType != dsValueType::Bool)
                     return {false, astIndex}; // FIXME: error on type
                 return {success, astIndex};
             default: DS_GUARD_OR(false, LowerResult(false, astIndex), "Unknown unary operator");
@@ -588,13 +588,23 @@ namespace descript {
             // we can only further optimize constants
             if (ast_[astIndex].type == AstType::Constant)
             {
-                if (ast_[astIndex].data.unary.op == Operator::Negate && ast_[childIndex].valueType == dsValueType::Double)
+                if (ast_[astIndex].data.unary.op == Operator::Negate && ast_[childIndex].valueType == dsValueType::Int32)
                 {
                     int64_t const value = ast_[childIndex].data.constant.int64_;
 
                     ast_[astIndex].type = AstType::Constant;
-                    ast_[astIndex].valueType = dsValueType::Double;
+                    ast_[astIndex].valueType = dsValueType::Int32;
                     ast_[astIndex].data = {.constant = {.int64_ = -value}};
+                    return astIndex;
+                }
+
+                if (ast_[astIndex].data.unary.op == Operator::Negate && ast_[childIndex].valueType == dsValueType::Float32)
+                {
+                    double const value = ast_[childIndex].data.constant.float64_;
+
+                    ast_[astIndex].type = AstType::Constant;
+                    ast_[astIndex].valueType = dsValueType::Float32;
+                    ast_[astIndex].data = {.constant = {.float64_ = -value}};
                     return astIndex;
                 }
 
@@ -627,7 +637,7 @@ namespace descript {
                 Ast& ast = ast_[astIndex];
 
                 // arithmetic operations on integers (we don't handle division yet because we're integer-only
-                if (valueType == dsValueType::Double && (op == Operator::Add || op == Operator::Sub || op == Operator::Mul))
+                if (valueType == dsValueType::Int32 && (op == Operator::Add || op == Operator::Sub || op == Operator::Mul))
                 {
                     int64_t const left = ast_[leftChildIndex].data.constant.int64_;
                     int64_t const right = ast_[rightChildIndex].data.constant.int64_;
@@ -723,7 +733,7 @@ namespace descript {
                 return true;
             }
 
-            if (ast.valueType == dsValueType::Double)
+            if (ast.valueType == dsValueType::Int32)
             {
                 int64_t const value = ast.data.constant.int64_;
 
@@ -777,20 +787,37 @@ namespace descript {
                         }
                     }
 
+                    dsExpressionConstantIndex const index = builder.pushConstant(dsValue{static_cast<int32_t>(value)});
+                    if (index == dsInvalidIndex)
+
                     {
-                        dsExpressionConstantIndex const index = builder.pushConstant(dsValue{static_cast<double>(value)});
-                        if (index == dsInvalidIndex)
-
-                        {
-                            // FIXME: error, constant overflow
-                            return false;
-                        }
-
-                        builder.pushOp((uint8_t)dsOpCode::PushConstant);
-                        builder.pushOp((uint8_t)(index.value() >> 8));
-                        builder.pushOp((uint8_t)(index.value() & 0xff));
+                        // FIXME: error, constant overflow
+                        return false;
                     }
+
+                    builder.pushOp((uint8_t)dsOpCode::PushConstant);
+                    builder.pushOp((uint8_t)(index.value() >> 8));
+                    builder.pushOp((uint8_t)(index.value() & 0xff));
                 }
+
+                return true;
+            }
+
+            if (ast.valueType == dsValueType::Float32)
+            {
+                double const value = ast.data.constant.float64_;
+
+                dsExpressionConstantIndex const index = builder.pushConstant(dsValue{static_cast<float>(value)});
+                if (index == dsInvalidIndex)
+
+                {
+                    // FIXME: error, constant overflow
+                    return false;
+                }
+
+                builder.pushOp((uint8_t)dsOpCode::PushConstant);
+                builder.pushOp((uint8_t)(index.value() >> 8));
+                builder.pushOp((uint8_t)(index.value() & 0xff));
                 return true;
             }
 
@@ -890,7 +917,8 @@ namespace descript {
         {
         case dsValueType::Nil: out_value = nullptr; return true;
         case dsValueType::Bool: out_value = ast_[astRoot_].data.constant.bool_; return true;
-        case dsValueType::Double: out_value = static_cast<double>(ast_[astRoot_].data.constant.int64_); return true;
+        case dsValueType::Int32: out_value = static_cast<int32_t>(ast_[astRoot_].data.constant.int64_); return true;
+        case dsValueType::Float32: out_value = static_cast<float>(ast_[astRoot_].data.constant.float64_); return true;
         default: DS_GUARD_OR(false, false, "Unrecognized literal data type");
         }
     }

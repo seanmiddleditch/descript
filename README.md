@@ -16,6 +16,7 @@ Done:
 
 Todo:
 - [ ] Global event queue
+- [ ] Coallesce events (dependencies, inputs, etc.)
 - [ ] Rename assembly to something less likely to be confused with assembler
 - [ ] Standard library of node types
 - [ ] Stack variables

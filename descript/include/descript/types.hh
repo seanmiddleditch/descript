@@ -62,7 +62,8 @@ namespace descript {
     enum class dsValueType : uint8_t
     {
         Nil,
-        Double,
+        Int32,
+        Float32,
         Bool,
     };
 
@@ -91,6 +92,6 @@ namespace descript {
     struct dsParam final
     {
         dsName name;
-        double value = 0.0;
+        int32_t value = 0;
     };
 } // namespace descript

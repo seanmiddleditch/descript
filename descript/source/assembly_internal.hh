@@ -83,6 +83,7 @@ namespace descript {
 
     struct dsAssemblyConstant
     {
+        dsValueType type = dsValueType::Nil;
         uint64_t serialized = 0;
     };
 
