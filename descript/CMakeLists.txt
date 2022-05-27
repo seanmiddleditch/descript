@@ -21,6 +21,7 @@ add_library(descript
     "source/expression_compiler.hh"
     "source/expression.cpp"
     "source/expression.hh"
+    "source/event.hh"
     "source/fnv.hh"
     "source/hash.cpp"
     "source/index.hh"

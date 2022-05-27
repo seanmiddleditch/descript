@@ -471,7 +471,7 @@ namespace descript {
 
         dsAssemblyNodeImpl const impl = instance.assembly->nodes[nodeIndex];
         Context context(*this, instance, nodeIndex);
-        impl.function(context, event, reinterpret_cast<uint8_t*>(&instance) + impl.userOffset);
+        impl.function(context, event.type, reinterpret_cast<uint8_t*>(&instance) + impl.userOffset);
     }
 
     void Runtime::setPlugPower(dsInstance& instance, dsAssemblyOutputPlugIndex plugIndex, bool powered)

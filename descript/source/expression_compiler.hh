@@ -50,6 +50,7 @@ namespace descript {
         DS_API bool optimize();
         DS_API bool build(dsExpressionBuilder& builder);
 
+        DS_API bool isEmpty() const noexcept;
         DS_API bool isConstant() const noexcept;
         DS_API bool isVariableOnly() const noexcept;
         DS_API dsValueType resultType() const noexcept;
@@ -217,6 +218,15 @@ namespace descript {
             int power = -1;
         };
 
+        enum class Status
+        {
+            Reset,
+            Lexed,
+            Parsed,
+            Lowered,
+            Optimized,
+        };
+
         bool tokenize();
         AstIndex parse();
         LowerResult lower(AstIndex astIndex);
@@ -235,6 +245,6 @@ namespace descript {
         dsString expression_;
         TokenIndex nextToken_ = dsInvalidIndex;
         AstIndex astRoot_ = dsInvalidIndex;
-        bool isLowered_ = false;
+        Status status_ = Status::Reset;
     };
 } // namespace descript

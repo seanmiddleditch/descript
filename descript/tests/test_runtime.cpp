@@ -30,13 +30,13 @@ namespace {
         virtual void onDeactivate(dsContext& ctx) {}
         virtual void onDependency(dsContext& ctx) {}
 
-        static void dispatch(dsContext& ctx, dsEvent const& event, void* userData)
+        static void dispatch(dsContext& ctx, dsEventType eventType, void* userData)
         {
             using namespace descript;
 
             NodeT* const self = static_cast<NodeT*>(userData);
 
-            switch (event.type)
+            switch (eventType)
             {
             case dsEventType::Activate: new (self) NodeT(); return self->onActivate(ctx);
             case dsEventType::CustomInput: return self->onCustomInput(ctx);

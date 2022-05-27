@@ -73,21 +73,9 @@ namespace descript {
         char const* nameEnd = nullptr;
     };
 
-    struct dsEvent final
-    {
-        union {
-            char _unused = 0;
-            struct Input
-            {
-                dsInputPlugIndex inputPlugIndex;
-            } input;
-        } data = {};
-        dsEventType type = dsEventType::Activate;
-    };
-
     using dsFunction = dsValue (*)(dsFunctionContext& context, void* userData);
 
-    using dsNodeFunction = void (*)(dsContext& context, dsEvent const& event, void* userData);
+    using dsNodeFunction = void (*)(dsContext& context, dsEventType eventType, void* userData);
 
     struct dsParam final
     {

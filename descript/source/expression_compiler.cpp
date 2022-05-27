@@ -40,7 +40,7 @@ namespace descript {
         expression_.reset();
         nextToken_ = dsInvalidIndex;
         astRoot_ = dsInvalidIndex;
-        isLowered_ = false;
+        status_ = Status::Reset;
     }
 
     bool dsExpressionCompiler::compile(char const* expression, char const* expressionEnd)
@@ -54,35 +54,46 @@ namespace descript {
         if (!tokenize())
             return false;
 
-        astRoot_ = parse();
-        if (astRoot_ == dsInvalidIndex)
-            return false;
+        if (!tokens_.empty())
+        {
+            astRoot_ = parse();
+            if (astRoot_ == dsInvalidIndex)
+                return false;
 
-        auto const [success, loweredRootIndex] = lower(astRoot_);
-        if (loweredRootIndex != dsInvalidIndex)
+            auto const [success, loweredRootIndex] = lower(astRoot_);
+            if (!success)
+                return false;
+            DS_GUARD_OR(loweredRootIndex != dsInvalidIndex, false);
+
             astRoot_ = loweredRootIndex;
+        }
 
-        isLowered_ = success;
-        return success;
+        status_ = Status::Lowered;
+        return true;
     }
 
     bool dsExpressionCompiler::optimize()
     {
-        DS_GUARD_OR(astRoot_ != dsInvalidIndex, false);
-        DS_GUARD_OR(isLowered_, false);
+        DS_GUARD_OR(status_ == Status::Lowered, false);
+
+        if (astRoot_ == dsInvalidIndex)
+            return true;
 
         AstIndex const optimizedAstIndex = optimize(astRoot_);
         if (optimizedAstIndex == dsInvalidIndex)
             return false;
 
         astRoot_ = optimizedAstIndex;
+        status_ = Status::Optimized;
         return true;
     }
 
     bool dsExpressionCompiler::build(dsExpressionBuilder& builder)
     {
-        DS_GUARD_OR(astRoot_ != dsInvalidIndex, false);
-        DS_GUARD_OR(isLowered_, false);
+        DS_GUARD_OR(status_ == Status::Lowered || status_ == Status::Optimized, false);
+
+        if (astRoot_ == dsInvalidIndex)
+            return true;
 
         if (!generate(astRoot_, builder))
             return false;
@@ -92,6 +103,9 @@ namespace descript {
 
     bool dsExpressionCompiler::tokenize()
     {
+        DS_GUARD_OR(status_ == Status::Reset, false);
+        status_ = Status::Lexed;
+
         constexpr struct TokenMap
         {
             char match;
@@ -226,9 +240,8 @@ namespace descript {
     // returns dsInvalidIndex on failure
     auto dsExpressionCompiler::parse() -> AstIndex
     {
-        if (tokens_.empty())
-            return dsInvalidIndex;
-
+        DS_GUARD_OR(status_ == Status::Lexed, dsInvalidIndex);
+        status_ = Status::Parsed;
         nextToken_ = TokenIndex{0};
 
         AstIndex const root = parseExpr(0);
@@ -422,7 +435,7 @@ namespace descript {
 
     auto dsExpressionCompiler::lower(AstIndex astIndex) -> LowerResult
     {
-        DS_GUARD_OR(!isLowered_, LowerResult(false, astIndex))
+        DS_GUARD_OR(status_ == Status::Parsed, LowerResult(false, astIndex));
         DS_GUARD_OR(astIndex != dsInvalidIndex, LowerResult(false, astIndex));
 
         switch (ast_[astIndex].type)
@@ -887,29 +900,41 @@ namespace descript {
         }
     }
 
+    bool dsExpressionCompiler::isEmpty() const noexcept {
+        DS_GUARD_OR(status_ == Status::Lowered || status_ == Status::Optimized, false);
+        return astRoot_ == dsInvalidIndex;
+    }
+
     bool dsExpressionCompiler::isConstant() const noexcept
     {
-        DS_GUARD_OR(astRoot_ != dsInvalidIndex, false);
+        DS_GUARD_OR(status_ == Status::Lowered || status_ == Status::Optimized, false);
+        if (astRoot_ == dsInvalidIndex)
+            return false;
         return ast_[astRoot_].type == AstType::Literal;
     }
 
     bool dsExpressionCompiler::isVariableOnly() const noexcept
     {
-        DS_GUARD_OR(astRoot_ != dsInvalidIndex, false);
+        DS_GUARD_OR(status_ == Status::Lowered || status_ == Status::Optimized, false);
+        if (astRoot_ == dsInvalidIndex)
+            return false;
         return ast_[astRoot_].type == AstType::Variable;
     }
 
     dsValueType dsExpressionCompiler::resultType() const noexcept
     {
-        DS_GUARD_OR(astRoot_ != dsInvalidIndex, dsValueType::Nil);
+        DS_GUARD_OR(status_ == Status::Lowered || status_ == Status::Optimized, dsValueType::Nil);
+        if (astRoot_ == dsInvalidIndex)
+            return dsValueType::Nil;
         return ast_[astRoot_].valueType;
     }
 
     bool dsExpressionCompiler::asConstant(dsValue& out_value) const
     {
+        DS_GUARD_OR(status_ == Status::Lowered || status_ == Status::Optimized, false);
 
-        DS_GUARD_OR(astRoot_ != dsInvalidIndex, false);
-
+        if (astRoot_ == dsInvalidIndex)
+            return false;
         if (ast_[astRoot_].type != AstType::Constant)
             return false;
 

@@ -6,6 +6,7 @@
 #include "descript/value.hh"
 
 #include "array.hh"
+#include "event.hh"
 #include "rel.hh"
 
 #include <cstdint>

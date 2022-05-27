@@ -1091,6 +1091,9 @@ namespace descript {
                     continue;
                 }
 
+                if (compiler.isEmpty())
+                    continue;
+
                 if (!compiler.optimize())
                 {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
