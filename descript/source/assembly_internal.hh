@@ -7,6 +7,7 @@
 
 #include "index.hh"
 #include "rel.hh"
+#include "storage.hh"
 
 #include <atomic>
 
@@ -83,7 +84,7 @@ namespace descript {
 
     struct dsAssemblyConstant
     {
-        dsValueType type = dsValueType::Nil;
+        uint32_t typeId = 0;
         uint64_t serialized = 0;
     };
 
@@ -128,7 +129,7 @@ namespace descript {
         std::atomic<uint32_t> references = 1;
         dsRelativeObject<dsAssemblyHeader> header;
         dsRelativeArray<dsAssemblyNodeImpl, dsAssemblyNodeIndex> nodes;
-        dsRelativeArray<dsValue, dsAssemblyConstantIndex> constants;
+        dsRelativeArray<dsValueStorage, dsAssemblyConstantIndex> constants;
         dsRelativeArray<dsAssemblyFunctionImpl, dsAssemblyFunctionIndex> functions;
         uint32_t assemblySize = 0;
         uint32_t instanceSize = 0;

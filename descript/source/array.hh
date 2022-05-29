@@ -86,6 +86,9 @@ namespace descript {
         Value& pushBack(Value const& value);
         Value& pushBack(Value&& value);
 
+        template <typename... Args>
+        Value& emplaceBack(Args&&... args);
+
         Value popBack();
 
         dsAllocator& allocator() const noexcept { return *allocator_; }
@@ -179,6 +182,19 @@ namespace descript {
         }
 
         return *new (sentinel_++) Value(static_cast<Value&&>(value));
+    }
+
+    template <typename Value, typename IndexT>
+    template <typename... Args>
+    Value& dsArray<Value, IndexT>::emplaceBack(Args&&... args)
+    {
+        if (sentinel_ == last_)
+        {
+            uint32_t const cap = last_ - first_;
+            reallocate(cap < 16 ? 16 : (cap + (cap >> 2)));
+        }
+
+        return *new (sentinel_++) Value(static_cast<Args&&>(args)...);
     }
 
     template <typename Value, typename IndexT>

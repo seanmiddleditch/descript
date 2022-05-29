@@ -10,6 +10,8 @@ namespace descript {
     class dsInstance;
     struct dsAssembly;
     class dsChangeBus;
+    class dsValueOut;
+    class dsValueRef;
 
     struct dsNodeRuntimeMeta final
     {
@@ -42,8 +44,8 @@ namespace descript {
         virtual dsInstanceId createInstance(dsAssembly* assembly, dsParam const* params = nullptr, uint32_t paramCount = 0) = 0;
         virtual void destroyInstance(dsInstanceId instanceId) = 0;
 
-        virtual bool writeVariable(dsInstanceId instanceId, dsName variable, dsValue const& value) = 0;
-        virtual bool readVariable(dsInstanceId instanceId, dsName variable, dsValue& out_value) = 0;
+        virtual bool writeVariable(dsInstanceId instanceId, dsName variable, dsValueRef const& value) = 0;
+        virtual bool readVariable(dsInstanceId instanceId, dsName variable, dsValueOut out_value) = 0;
 
         virtual void processEvents() = 0;
 

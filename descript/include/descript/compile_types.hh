@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "descript/meta.hh"
 #include "descript/types.hh"
 
 namespace descript {
@@ -33,11 +34,16 @@ namespace descript {
         dsNodeKind kind = dsNodeKind::State;
     };
 
+    struct dsVariableCompileMeta
+    {
+        dsTypeId type;
+    };
+
     struct dsFunctionSignature
     {
-        dsValueType const* paramTypes = nullptr;
+        dsTypeId const* paramTypes = nullptr;
         dsFunctionSignature* next = nullptr;
-        dsValueType returnType = dsValueType::Nil;
+        dsTypeId returnType;
         uint32_t paramCount = 0;
     };
 
@@ -45,6 +51,6 @@ namespace descript {
     {
         char const* name = nullptr;
         dsFunctionId functionId = dsInvalidFunctionId;
-        dsValueType returnType = dsValueType::Nil;
+        dsTypeId returnType;
     };
 }

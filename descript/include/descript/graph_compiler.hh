@@ -11,7 +11,6 @@
 namespace descript {
     class dsAllocator;
     class dsGraphCompiler;
-    class dsValue;
 
     class dsGraphCompilerHost
     {
@@ -41,7 +40,7 @@ namespace descript {
 
         virtual void addWire(dsNodeId fromNodeId, dsOutputPlugIndex fromPlugIndex, dsNodeId toNodeId, dsInputPlugIndex toPlugIndex) = 0;
 
-        virtual void addVariable(dsValueType type, char const* name, char const* nameEnd = nullptr) = 0;
+        virtual void addVariable(dsTypeId type, char const* name, char const* nameEnd = nullptr) = 0;
 
         virtual void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* name, char const* nameEnd = nullptr) = 0;
         virtual void bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression,

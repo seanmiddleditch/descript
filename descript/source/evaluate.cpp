@@ -19,32 +19,38 @@ namespace descript {
         class Context final : public dsFunctionContext
         {
         public:
-            Context(dsEvaluateHost& host, uint32_t argc, dsValue const* argv) noexcept : host_(host), argc_(argc), argv_(argv) {}
-
-            uint32_t argc() const noexcept { return argc_; }
-            dsValue const& argAt(uint32_t index) const noexcept
+            Context(dsEvaluateHost& host, uint32_t argc, dsValueStorage const* argv, dsValueStorage& result) noexcept
+                : host_(host), argc_(argc), argv_(argv), result_(result)
             {
-                DS_GUARD_OR(index < argc_, default_);
-                return argv_[index];
             }
+
+            uint32_t getArgCount() const noexcept { return argc_; }
+            dsValueRef getArgValueAt(uint32_t index) const noexcept
+            {
+                DS_ASSERT(index < argc_);
+                return argv_[index].ref();
+            }
+
+            void result(dsValueRef const& result) override { result_ = dsValueStorage{result}; }
 
             void listen(dsEmitterId emitterId) override { host_.listen(emitterId); }
 
         private:
             dsEvaluateHost& host_;
             uint32_t argc_ = 0;
-            dsValue const* argv_ = nullptr;
-            dsValue default_;
+            dsValueStorage const* argv_ = nullptr;
+            dsValueStorage& result_;
         };
 
         template <typename T>
         constexpr bool IsArithmetic =
-            std::conjunction_v<std::is_scalar<T>, std::negation<std::is_enum<T>>, std::negation<std::is_same<T, bool>>>;
+            std::conjunction_v<std::is_arithmetic<T>, std::negation<std::is_same<T, bool>>>;
 
         static_assert(IsArithmetic<int>);
         static_assert(IsArithmetic<float>);
         static_assert(!IsArithmetic<bool>);
-        static_assert(!IsArithmetic<dsValueType>);
+        static_assert(!IsArithmetic<char*>);
+        static_assert(!IsArithmetic<dsPlugKind>);
 
         struct Neg
         {
@@ -110,84 +116,105 @@ namespace descript {
         static_assert(IsApplicable<Add, int, int>);
 
         template <typename Op, typename T>
-        constexpr dsValue apply(T const& val) noexcept
+        constexpr bool applyTyped(dsValueOut& out_result, T const& val) noexcept
         {
             if constexpr (IsApplicable<Op, T>)
-                return dsValue{Op::apply(val)};
+                return out_result.accept(Op::apply(val));
             else
-                return nullptr;
+                return false;
         }
 
         template <typename Op>
-        constexpr dsValue apply(dsValue const& val) noexcept
+        constexpr bool apply(dsValueOut out_result, dsValueStorage const& val) noexcept
         {
-            switch (val.type())
-            {
-            case dsValueType::Int32: return apply<Op>(val.as<int32_t>());
-            case dsValueType::Float32: return apply<Op>(val.as<float>());
-            case dsValueType::Bool: return apply<Op>(val.as<bool>());
-            default: return dsValue{};
-            }
+            if (val.type() == dsType<int32_t>)
+                return applyTyped<Op>(out_result, val.as<int32_t>());
+            if (val.type() == dsType<float>)
+                return applyTyped<Op>(out_result, val.as<float>());
+            if (val.type() == dsType<bool>)
+                return applyTyped<Op>(out_result, val.as<bool>());
+            return false;
         }
 
         template <typename Op, typename T, typename U>
-        constexpr dsValue apply(T const& left, U const& right) noexcept
+        constexpr bool applyTyped(dsValueOut& out_result, T const& left, U const& right) noexcept
         {
             if constexpr (IsApplicable<Op, T, U>)
-                return dsValue{Op::apply(left, right)};
+                return out_result.accept(Op::apply(left, right));
             else
-                return nullptr;
+                return false;
         }
 
         // note: left/right are swapped because we pop the right before the left
         template <typename Op>
-        constexpr dsValue apply(dsValue const& left, dsValue const& right) noexcept
+        constexpr bool apply(dsValueOut out_result, dsValueStorage const& left, dsValueStorage const& right) noexcept
         {
             if (left.type() != right.type())
-                return dsValue{};
+                return false;
 
-            switch (left.type())
-            {
-            case dsValueType::Int32: return apply<Op>(left.as<int32_t>(), right.as<int32_t>());
-            case dsValueType::Float32: return apply<Op>(left.as<float>(), right.as<float>());
-            case dsValueType::Bool: return apply<Op>(left.as<bool>(), right.as<bool>());
-            default: return dsValue{};
-            }
+            if (left.type() == dsType<int32_t>)
+                return applyTyped<Op>(out_result, left.as<int32_t>(), right.as<int32_t>());
+            if (left.type() == dsType<float>)
+                return applyTyped<Op>(out_result, left.as<float>(), right.as<float>());
+            if (left.type() == dsType<bool>)
+                return applyTyped<Op>(out_result, left.as<bool>(), right.as<bool>());
+            return false;
         }
+
+        union RefUnion {
+            char dummy_ = 0;
+            dsValueRef ref;
+
+            RefUnion() = default;
+            ~RefUnion() = default;
+        };
     } // namespace
 
-#define DS_CHECKTOP()          \
+#define DS_CHECKTOP()            \
     if (stackTop >= s_stackSize) \
-        return false;          \
-    else                       \
+        return false;            \
+    else                         \
         ;
 
-#define DS_PUSH(val)               \
-    if (true)                      \
-    {                              \
-        DS_CHECKTOP()              \
-        stack[stackTop++] = (val); \
-    }                              \
-    else                           \
+#define DS_PUSH(val)                             \
+    if (true)                                    \
+    {                                            \
+        DS_CHECKTOP()                            \
+        stack[stackTop++] = dsValueStorage(val); \
+    }                                            \
+    else                                         \
         ;
 
-#define DS_POP() (stackTop > 0 ? std::move(stack[--stackTop]) : dsValue{})
+#define DS_POP(result) \
+    if (stackTop == 0) \
+        return false;  \
+    result = std::move(stack[--stackTop])
 
-#define DS_BINOP(op)                     \
-    {                                    \
-        auto const& right = DS_POP();    \
-        auto const& left = DS_POP();     \
-        DS_PUSH(apply<op>(left, right)); \
+#define DS_UNNOP(op)                                  \
+    {                                                 \
+        DS_POP(auto const& value);                    \
+        if (!apply<op>(stack[stackTop].out(), value)) \
+            return false;                             \
+        ++stackTop;                                   \
     }
 
-    bool dsEvaluate(dsEvaluateHost& host, uint8_t const* ops, uint32_t opsLen, dsValue& out_value)
+#define DS_BINOP(op)                                        \
+    {                                                       \
+        DS_POP(auto const& right);                          \
+        DS_POP(auto const& left);                           \
+        if (!apply<op>(stack[stackTop].out(), left, right)) \
+            return false;                                   \
+        ++stackTop;                                         \
+    }
+
+    bool dsEvaluate(dsEvaluateHost& host, uint8_t const* ops, uint32_t opsLen, dsValueOut out_value)
     {
         DS_GUARD_OR(ops != nullptr, false);
         DS_GUARD_OR(opsLen > 0, false);
 
         uint8_t const* const opsEnd = ops + opsLen;
 
-        dsValue stack[s_stackSize];
+        dsValueStorage stack[s_stackSize];
         uint32_t stackTop = 0;
 
         for (uint8_t const* ip = ops; ip != opsEnd; ++ip)
@@ -195,22 +222,22 @@ namespace descript {
             switch (dsOpCode(*ip))
             {
             case dsOpCode::Nop: break;
-            case dsOpCode::PushTrue: DS_PUSH(dsValue{true}); break;
-            case dsOpCode::PushFalse: DS_PUSH(dsValue{false}); break;
-            case dsOpCode::PushNil: DS_PUSH(dsValue{nullptr}); break;
-            case dsOpCode::Push0: DS_PUSH(dsValue{0}); break;
-            case dsOpCode::Push1: DS_PUSH(dsValue{1}); break;
-            case dsOpCode::Push2: DS_PUSH(dsValue{2}); break;
-            case dsOpCode::PushNeg1: DS_PUSH(dsValue{-1}); break;
+            case dsOpCode::PushTrue: DS_PUSH(true); break;
+            case dsOpCode::PushFalse: DS_PUSH(false); break;
+            case dsOpCode::PushNil: DS_PUSH(nullptr); break;
+            case dsOpCode::Push0: DS_PUSH(0); break;
+            case dsOpCode::Push1: DS_PUSH(1); break;
+            case dsOpCode::Push2: DS_PUSH(2); break;
+            case dsOpCode::PushNeg1: DS_PUSH(-1); break;
             case dsOpCode::PushS8:
                 if (++ip == opsEnd)
                     return false;
-                DS_PUSH(dsValue{static_cast<int32_t>(static_cast<int8_t>(*ip))});
+                DS_PUSH(static_cast<int32_t>(static_cast<int8_t>(*ip)));
                 break;
             case dsOpCode::PushU8:
                 if (++ip == opsEnd)
                     return false;
-                DS_PUSH(dsValue{static_cast<int32_t>(*ip)});
+                DS_PUSH(static_cast<int32_t>(*ip));
                 break;
             case dsOpCode::PushS16: {
                 if (++ip == opsEnd)
@@ -219,7 +246,7 @@ namespace descript {
                 if (++ip == opsEnd)
                     return false;
                 value |= *ip;
-                DS_PUSH(dsValue{static_cast<int32_t>(static_cast<int16_t>(value))});
+                DS_PUSH(static_cast<int32_t>(static_cast<int16_t>(value)));
                 break;
             }
             case dsOpCode::PushU16: {
@@ -229,7 +256,7 @@ namespace descript {
                 if (++ip == opsEnd)
                     return false;
                 value |= *ip;
-                DS_PUSH(dsValue{static_cast<int32_t>(value)});
+                DS_PUSH(static_cast<int32_t>(value));
                 break;
             }
             case dsOpCode::PushConstant: {
@@ -241,7 +268,7 @@ namespace descript {
                     return false;
                 index |= *ip;
                 DS_CHECKTOP();
-                if (!host.readConstant(index, stack[stackTop]))
+                if (!host.readConstant(index, stack[stackTop].out()))
                     return false;
                 ++stackTop;
                 break;
@@ -254,7 +281,7 @@ namespace descript {
                     return false;
                 index |= *ip;
                 DS_CHECKTOP();
-                if (!host.readVariable(index, stack[stackTop]))
+                if (!host.readVariable(index, stack[stackTop].out()))
                     return false;
                 ++stackTop;
                 break;
@@ -272,17 +299,18 @@ namespace descript {
                 if (argc > stackTop)
                     return false;
 
-                dsValue result;
-                Context ctx(host, argc, stack + (stackTop - argc));
-                if (!host.invokeFunction(index, ctx, result))
+                dsValueStorage result;
+                uint32_t const stackArgOffset = stackTop - argc;
+                Context ctx(host, argc, &stack[stackArgOffset], result);
+                if (!host.invokeFunction(index, ctx))
                     return false;
 
                 stackTop -= argc;
                 DS_PUSH(std::move(result));
                 break;
             }
-            case dsOpCode::Neg: DS_PUSH(apply<Neg>(DS_POP())); break;
-            case dsOpCode::Not: DS_PUSH(apply<Not>(DS_POP())); break;
+            case dsOpCode::Neg: DS_UNNOP(Neg); break;
+            case dsOpCode::Not: DS_UNNOP(Not); break;
             case dsOpCode::Add: DS_BINOP(Add); break;
             case dsOpCode::Sub: DS_BINOP(Sub); break;
             case dsOpCode::Mul: DS_BINOP(Mul); break;
@@ -297,7 +325,6 @@ namespace descript {
         if (stackTop != 1)
             return false;
 
-        out_value = DS_POP();
-        return true;
+        return out_value.accept(stack[0].ref());
     }
 } // namespace descript

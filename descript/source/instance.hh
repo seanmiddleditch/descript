@@ -24,7 +24,7 @@ namespace descript {
         dsRelativeBitArray<dsAssemblyNodeIndex> activeNodes;
         dsRelativeBitArray<dsAssemblyOutputPlugIndex> activeInputPlugs;
         dsRelativeBitArray<dsAssemblyOutputPlugIndex> activeOutputPlugs;
-        dsRelativeArray<dsValue, dsAssemblyVariableIndex> values;
+        dsRelativeArray<dsValueStorage, dsAssemblyVariableIndex> values;
 
         struct Event
         {

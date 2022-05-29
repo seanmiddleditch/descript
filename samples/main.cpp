@@ -232,7 +232,7 @@ namespace sample {
         for (auto const& varPtr : graph_->variables)
         {
             if (!varPtr->name.empty())
-                compiler->addVariable(dsValueType::Int32, varPtr->name.c_str());
+                compiler->addVariable(dsType<int32_t>, varPtr->name.c_str());
         }
 
         for (auto const& nodePtr : graph_->nodes)

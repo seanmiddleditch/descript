@@ -26,8 +26,8 @@ namespace descript {
             dsInstanceId createInstance(dsAssembly* assembly, dsParam const* params, uint32_t paramCount) override;
             void destroyInstance(dsInstanceId instanceId) override;
 
-            bool writeVariable(dsInstanceId instanceId, dsName name, dsValue const& value) override;
-            bool readVariable(dsInstanceId instanceId, dsName name, dsValue& out_value) override;
+            bool writeVariable(dsInstanceId instanceId, dsName name, dsValueRef const& value) override;
+            bool readVariable(dsInstanceId instanceId, dsName name, dsValueOut out_value) override;
 
             void processEvents() override;
 
@@ -62,13 +62,13 @@ namespace descript {
 
             void setNodePowered(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, bool powered);
 
-            bool readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsInputSlotIndex slotIndex, dsValue& out_value);
-            bool readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValue& out_value);
-            bool writeSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValue const& value);
+            bool readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsInputSlotIndex slotIndex, dsValueOut out_value);
+            bool readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValueOut out_value);
+            bool writeSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValueRef const& value);
 
-            bool writeVariable(dsInstance& instance, uint64_t nameHash, dsValue const& value);
+            bool writeVariable(dsInstance& instance, uint64_t nameHash, dsValueRef const& value);
             void writeVariable(dsInstance& instance, dsAssemblyVariableIndex variableIndex, dsAssemblyNodeIndex sourceNodeIndex,
-                dsValue const& value);
+                dsValueRef const& value);
 
             void addListener(dsInstanceId instanceId, uint32_t inputSlotIndex, dsEmitterId emitterId);
             void forgetListener(dsInstanceId instanceId, uint32_t inputSlotIndex);
@@ -132,8 +132,12 @@ namespace descript {
             header.outputPlugs.count);
         instance.values.assign(reinterpret_cast<uintptr_t>(&instance), assembly->instanceValuesOffset, header.variables.count);
 
+        // reset all variables, since the memset will leave them in an invalid state
+        for (uint32_t index = 0; index != instance.values.count; ++index)
+            instance.values[dsAssemblyVariableIndex(index)] = {};
+
         for (uint32_t index = 0; index != paramCount; ++index)
-            writeVariable(instance, dsHashFnv1a64(params[index].name.name, params[index].name.nameEnd), dsValue{params[index].value});
+            writeVariable(instance, dsHashFnv1a64(params[index].name.name, params[index].name.nameEnd), dsValueRef{params[index].value});
 
         for (dsAssemblyNodeIndex nodeIndex : header.entryNodes)
             sendLocalEvent(instance, nodeIndex, {.type = dsEventType::Activate});
@@ -159,7 +163,7 @@ namespace descript {
         }
     }
 
-    bool Runtime::writeVariable(dsInstanceId instanceId, dsName name, dsValue const& value)
+    bool Runtime::writeVariable(dsInstanceId instanceId, dsName name, dsValueRef const& value)
     {
         dsInstance* const instance = findInstance(instanceId);
         if (instance == nullptr)
@@ -170,7 +174,7 @@ namespace descript {
         return writeVariable(*instance, nameHash, value);
     }
 
-    bool Runtime::readVariable(dsInstanceId instanceId, dsName variable, dsValue& out_value)
+    bool Runtime::readVariable(dsInstanceId instanceId, dsName variable, dsValueOut out_value)
     {
         dsInstance* const instance = findInstance(instanceId);
         if (instance == nullptr)
@@ -180,13 +184,9 @@ namespace descript {
 
         dsAssemblyHeader const& header = *instance->assembly->header;
         for (dsAssemblyVariableIndex variableIndex{0}; variableIndex != header.variables.count; ++variableIndex)
-        {
             if (header.variables[variableIndex].nameHash == variableHash)
-            {
-                out_value = instance->values[variableIndex];
-                return true;
-            }
-        }
+                return out_value.accept(instance->values[variableIndex].ref());
+
         return false;
     }
 
@@ -274,10 +274,10 @@ namespace descript {
         uint32_t numInputSlots() const noexcept override;
         uint32_t numOutputSlots() const noexcept override;
 
-        bool readSlot(dsInputSlotIndex slotIndex, dsValue& out_value) override;
-        bool readSlot(dsOutputSlotIndex slotIndex, dsValue& out_value) override;
+        bool readSlot(dsInputSlotIndex slotIndex, dsValueOut out_value) override;
+        bool readSlot(dsOutputSlotIndex slotIndex, dsValueOut out_value) override;
 
-        void writeSlot(dsOutputSlotIndex slotIndex, dsValue const& value) override;
+        void writeSlot(dsOutputSlotIndex slotIndex, dsValueRef const& value) override;
 
         void setPlugPower(dsOutputPlugIndex plugIndex, bool powered) override;
 
@@ -311,17 +311,17 @@ namespace descript {
         return header.nodes[nodeIndex_].outputSlotCount;
     }
 
-    bool Runtime::Context::readSlot(dsInputSlotIndex slotIndex, dsValue& out_value)
+    bool Runtime::Context::readSlot(dsInputSlotIndex slotIndex, dsValueOut out_value)
     {
         return runtime_.readSlot(instance_, nodeIndex_, slotIndex, out_value);
     }
 
-    bool Runtime::Context::readSlot(dsOutputSlotIndex slotIndex, dsValue& out_value)
+    bool Runtime::Context::readSlot(dsOutputSlotIndex slotIndex, dsValueOut out_value)
     {
         return runtime_.readSlot(instance_, nodeIndex_, slotIndex, out_value);
     }
 
-    void Runtime::Context::writeSlot(dsOutputSlotIndex slotIndex, dsValue const& value)
+    void Runtime::Context::writeSlot(dsOutputSlotIndex slotIndex, dsValueRef const& value)
     {
         runtime_.writeSlot(instance_, nodeIndex_, slotIndex, value);
     }
@@ -341,44 +341,38 @@ namespace descript {
 
         void listen(dsEmitterId emitterId) override { runtime_.addListener(instance_.instanceId, inputSlotIndex_.value(), emitterId); }
 
-        bool readConstant(uint32_t constantIndex, dsValue& out_value) override;
-        bool readVariable(uint32_t variableIndex, dsValue& out_value) override;
-        bool invokeFunction(uint32_t functionIndex, dsFunctionContext& ctx, dsValue& out_result) override;
+        bool readConstant(uint32_t constantIndex, dsValueOut out_value) override;
+        bool readVariable(uint32_t variableIndex, dsValueOut out_value) override;
+        bool invokeFunction(uint32_t functionIndex, dsFunctionContext& ctx) override;
 
     private:
         Runtime& runtime_;
         dsInstance& instance_;
-        dsSpan<dsValue const> constants_;
-        dsSpan<dsValue const> variables_;
+        dsSpan<dsValueStorage const> constants_;
+        dsSpan<dsValueStorage const> variables_;
         dsAssemblyInputSlotIndex inputSlotIndex_ = dsInvalidIndex;
     };
 
-    bool Runtime::EvaluateHost::readConstant(uint32_t constantIndex, dsValue& out_value)
+    bool Runtime::EvaluateHost::readConstant(uint32_t constantIndex, dsValueOut out_value)
     {
         if (constantIndex < instance_.assembly->constants.count)
-        {
-            out_value = instance_.assembly->constants[dsAssemblyConstantIndex{constantIndex}];
-            return true;
-        }
+            return out_value.accept(instance_.assembly->constants[dsAssemblyConstantIndex{constantIndex}].ref());
         return false;
     }
 
-    bool Runtime::EvaluateHost::readVariable(uint32_t variableIndex, dsValue& out_value)
+    bool Runtime::EvaluateHost::readVariable(uint32_t variableIndex, dsValueOut out_value)
     {
         if (variableIndex < instance_.values.count)
-        {
-            out_value = instance_.values[dsAssemblyVariableIndex{variableIndex}];
-            return true;
-        }
+            return out_value.accept(instance_.values[dsAssemblyVariableIndex{variableIndex}].ref());
         return false;
     }
 
-    bool Runtime::EvaluateHost::invokeFunction(uint32_t functionIndex, dsFunctionContext& ctx, dsValue& out_result)
+    bool Runtime::EvaluateHost::invokeFunction(uint32_t functionIndex, dsFunctionContext& ctx)
     {
         if (functionIndex < instance_.assembly->functions.count)
         {
             dsAssemblyFunctionImpl const& func = instance_.assembly->functions[dsAssemblyFunctionIndex{functionIndex}];
-            out_result = func.function(ctx, func.userData);
+            func.function(ctx, func.userData);
             return true;
         }
         return false;
@@ -527,7 +521,7 @@ namespace descript {
             sendLocalEvent(instance, nodeIndex, {.type = dsEventType::Deactivate});
     }
 
-    bool Runtime::readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsInputSlotIndex slotIndex, dsValue& out_value)
+    bool Runtime::readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsInputSlotIndex slotIndex, dsValueOut out_value)
     {
         DS_ASSERT(nodeIndex.value() < instance.activeNodes.count);
 
@@ -539,10 +533,7 @@ namespace descript {
         dsAssemblyInputSlotIndex const inputSlotIndex = node.inputSlotStart + slotIndex.value();
         dsAssemblyInputSlot const& slot = header.inputSlots[inputSlotIndex];
         if (slot.variableIndex != dsInvalidIndex)
-        {
-            out_value = instance.values[slot.variableIndex];
-            return true;
-        }
+            return out_value.accept(instance.values[slot.variableIndex].ref());
 
         if (slot.expressionIndex != dsInvalidIndex)
         {
@@ -559,7 +550,7 @@ namespace descript {
         return false;
     }
 
-    bool Runtime::readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValue& out_value)
+    bool Runtime::readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValueOut out_value)
     {
         DS_ASSERT(nodeIndex.value() < instance.activeNodes.count);
 
@@ -570,15 +561,12 @@ namespace descript {
 
         dsAssemblyOutputSlot const& slot = header.outputSlots[node.outputSlotStart + slotIndex.value()];
         if (slot.variableIndex != dsInvalidIndex)
-        {
-            out_value = instance.values[slot.variableIndex];
-            return true;
-        }
+            return out_value.accept(instance.values[slot.variableIndex].ref());
 
         return false;
     }
 
-    bool Runtime::writeSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValue const& value)
+    bool Runtime::writeSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValueRef const& value)
     {
         DS_ASSERT(nodeIndex.value() < instance.activeNodes.count);
 
@@ -595,7 +583,7 @@ namespace descript {
         return true;
     }
 
-    bool Runtime::writeVariable(dsInstance& instance, uint64_t nameHash, dsValue const& value)
+    bool Runtime::writeVariable(dsInstance& instance, uint64_t nameHash, dsValueRef const& value)
     {
         dsAssemblyHeader const& header = *instance.assembly->header;
         for (dsAssemblyVariableIndex variableIndex{0}; variableIndex != header.variables.count; ++variableIndex)
@@ -611,14 +599,14 @@ namespace descript {
     }
 
     void Runtime::writeVariable(dsInstance& instance, dsAssemblyVariableIndex variableIndex, dsAssemblyNodeIndex sourceNodeIndex,
-        dsValue const& value)
+        dsValueRef const& value)
     {
         DS_ASSERT(variableIndex.value() < instance.values.count);
 
         dsAssemblyHeader const& header = *instance.assembly->header;
         if (instance.values[variableIndex] != value)
         {
-            instance.values[variableIndex] = value;
+            instance.values[variableIndex] = dsValueStorage{value};
             triggerDependencies(instance, variableIndex, sourceNodeIndex);
         }
     }

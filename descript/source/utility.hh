@@ -117,23 +117,3 @@ namespace descript {
         return name.name[0] == '\0';
     }
 } // namespace descript
-
-#define DS_GUARD_OR(x, r, ...) \
-    if (DS_VERIFY(x))          \
-    {                          \
-    }                          \
-    else                       \
-    {                          \
-        DS_BREAK();            \
-        return (r);            \
-    }
-
-#define DS_GUARD_VOID(x, ...) \
-    if (DS_VERIFY(x))         \
-    {                         \
-    }                         \
-    else                      \
-    {                         \
-        DS_BREAK();           \
-        return;               \
-    }

@@ -16,3 +16,23 @@
 #if !defined(DS_VERIFY)
 #define DS_VERIFY(x, ...) !!((x) || (DS_BREAK(), false))
 #endif
+
+#define DS_GUARD_OR(x, r, ...) \
+    if (DS_VERIFY(x))          \
+    {                          \
+    }                          \
+    else                       \
+    {                          \
+        DS_BREAK();            \
+        return (r);            \
+    }
+
+#define DS_GUARD_VOID(x, ...) \
+    if (DS_VERIFY(x))         \
+    {                         \
+    }                         \
+    else                      \
+    {                         \
+        DS_BREAK();           \
+        return;               \
+    }

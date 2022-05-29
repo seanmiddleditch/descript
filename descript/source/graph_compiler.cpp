@@ -45,7 +45,7 @@ namespace descript {
 
             void addWire(dsNodeId fromNodeId, dsOutputPlugIndex fromPlugIndex, dsNodeId toNodeId, dsInputPlugIndex toPlugIndex) override;
 
-            void addVariable(dsValueType type, char const* name, char const* nameEnd) override;
+            void addVariable(dsTypeId type, char const* name, char const* nameEnd) override;
 
             void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* name, char const* nameEnd = nullptr) override;
             void bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression,
@@ -203,7 +203,7 @@ namespace descript {
                 // source data
                 dsString name;
                 uint64_t nameHash = 0;
-                dsValueType type = dsValueType::Nil;
+                dsTypeId type;
 
                 // compiled data
                 dsAssemblyVariableIndex index = dsInvalidIndex;
@@ -300,7 +300,7 @@ namespace descript {
             dsArray<InputBinding, InputBindingIndex> inputBindings_;
             dsArray<OutputBinding, OutputBindingIndex> outputBindings_;
             dsArray<Expression, ExpressionIndex> expressions_;
-            dsArray<dsValue, dsAssemblyConstantIndex> constants_;
+            dsArray<dsValueStorage, dsAssemblyConstantIndex> constants_;
             dsArray<dsFunctionId, dsAssemblyFunctionIndex> functions_;
             dsArray<uint8_t, dsAssemblyByteCodeIndex> byteCode_;
             dsArray<dsCompileError> errors_;
@@ -406,7 +406,7 @@ namespace descript {
         wires_.pushBack(Wire{.fromNodeId = fromNodeId, .toNodeId = toNodeId, .fromPlugIndex = fromPlugIndex, .toPlugIndex = toPlugIndex});
     }
 
-    void GraphCompiler::addVariable(dsValueType type, char const* name, char const* nameEnd)
+    void GraphCompiler::addVariable(dsTypeId type, char const* name, char const* nameEnd)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
         DS_GUARD_VOID(!dsIsEmpty(name, nameEnd));
@@ -694,16 +694,15 @@ namespace descript {
         for (auto&& [index, value] : dsEnumerate(constants_))
         {
             dsAssemblyConstant& outConst = header->constants[dsAssemblyConstantIndex{index}];
-            outConst.type = value.type();
+            outConst.typeId = value.type().id();
             outConst.serialized = 0;
 
-            switch (value.type())
-            {
-            case dsValueType::Nil: break;
-            case dsValueType::Int32: outConst.serialized = dsBitCast<uint32_t>(value.as<int32_t>()); break;
-            case dsValueType::Float32: outConst.serialized = dsBitCast<uint32_t>(value.as<float>()); break;
-            default: DS_GUARD_OR(false, false, "Unknown value type");
-            }
+            if (value.type() == dsType<int32_t>)
+                outConst.serialized = dsBitCast<uint32_t>(value.as<int32_t>());
+            else if (value.type() == dsType<float>)
+                outConst.serialized = dsBitCast<uint32_t>(value.as<float>());
+            else if (value.type() != dsType<decltype(nullptr)>)
+                DS_GUARD_OR(false, false, "Unsupported value type");
         }
 
         for (auto&& [index, functionId] : dsEnumerate(functions_))
@@ -1022,7 +1021,7 @@ namespace descript {
     public:
         explicit ExpressionCompilerHost(GraphCompiler& compiler) noexcept : compiler_(compiler) {}
 
-        bool lookupVariable(dsName name, dsValueType& out_type) const noexcept override;
+        bool lookupVariable(dsName name, dsVariableCompileMeta& out_meta) const noexcept override;
 
         bool lookupFunction(dsName name, dsFunctionCompileMeta& out_meta) const noexcept override
         {
@@ -1045,7 +1044,7 @@ namespace descript {
         }
 
         void pushOp(uint8_t byte) override { compiler_.byteCode_.pushBack(byte); }
-        uint32_t pushConstant(dsValue const& value) override;
+        uint32_t pushConstant(dsValueRef const& value) override;
         uint32_t pushFunction(dsFunctionId functionId) override;
         uint32_t pushVariable(uint64_t nameHash) override;
 
@@ -1346,30 +1345,36 @@ namespace descript {
         return 0;
     }
 
-    uint32_t GraphCompiler::ExpressionBuilder::pushConstant(dsValue const& value)
+    uint32_t GraphCompiler::ExpressionBuilder::pushConstant(dsValueRef const& value)
     {
-        // FIXME: implement de-duplication
+        for (auto&& [index, constant] : dsEnumerate(compiler_.constants_))
+            if (value == constant.ref())
+                return index;
+
         uint32_t const index{compiler_.constants_.size()};
-        compiler_.constants_.pushBack(value);
+        compiler_.constants_.emplaceBack(value);
         return index;
     }
 
     uint32_t GraphCompiler::ExpressionBuilder::pushFunction(dsFunctionId functionId)
     {
-        // FIXME: implement de-duplication
+        for (auto&& [index, function] : dsEnumerate(compiler_.functions_))
+            if (function == functionId)
+                return index;
+
         uint32_t const index{compiler_.functions_.size()};
         compiler_.functions_.pushBack(functionId);
         return index;
     }
 
-    bool GraphCompiler::ExpressionCompilerHost::lookupVariable(dsName name, dsValueType& out_type) const noexcept
+    bool GraphCompiler::ExpressionCompilerHost::lookupVariable(dsName name, dsVariableCompileMeta& out_meta) const noexcept
     {
         uint64_t const nameHash = dsHashFnv1a64(name.name, name.nameEnd);
         for (Variable const& var : compiler_.variables_)
         {
             if (var.nameHash == nameHash)
             {
-                out_type = var.type;
+                out_meta.type = var.type;
                 return true;
             }
         }

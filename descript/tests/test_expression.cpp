@@ -17,19 +17,21 @@ TEST_CASE("Virtual Machine", "[vm]")
     using namespace descript::test;
     using namespace descript::test::expression;
 
-    static constexpr Variable variables[] = {
-        Variable{"Seven", dsValue{7}},
-        Variable{"Eleven", dsValue{11}},
+    static const Variable variables[] = {
+        Variable{.name = "Seven", .value = dsValueStorage{7}},
+        Variable{.name = "Eleven", .value = dsValueStorage{11}},
     };
 
     static constexpr Function functions[] = {
-        Function{"Add", dsValueType::Int32,
-            [](dsFunctionContext& ctx, void* userData) -> dsValue {
-                int32_t result = 0;
-                for (uint32_t i = 0; i != ctx.argc(); ++i)
-                    result += ctx.argAt(i).as<int32_t>();
-                return result;
-            }},
+        Function{.name = "Add",
+            .returnType = dsType<int32_t>,
+            .function =
+                [](dsFunctionContext& ctx, void* userData) {
+                    int32_t result = 0;
+                    for (uint32_t i = 0; i != ctx.getArgCount(); ++i)
+                        result += ctx.getArgAt<int32_t>(i);
+                    ctx.result(result);
+                }},
     };
 
     LeakTestAllocator alloc;
@@ -108,8 +110,9 @@ TEST_CASE("Virtual Machine", "[vm]")
         CHECK_FALSE(tester.constant("Seven", 7));
     }
 
-    SECTION("Only variable") {
-        CHECK(tester.variable("Seven", dsValueType::Float32));
-        CHECK_FALSE(tester.variable("7", dsValueType::Float32));
+    SECTION("Only variable")
+    {
+        CHECK(tester.variable("Seven", dsType<int32_t>));
+        CHECK_FALSE(tester.variable("7", dsType<int32_t>));
     }
 }

@@ -9,6 +9,7 @@ add_library(descript
     "include/descript/graph_compiler.hh"
     "include/descript/hash.hh"
     "include/descript/key.hh"
+    "include/descript/meta.hh"
     "include/descript/node.hh"
     "include/descript/runtime.hh"
     "include/descript/types.hh"
@@ -30,7 +31,9 @@ add_library(descript
     "source/ops.hh"
     "source/rel.hh"
     "source/runtime.cpp"
+    "source/storage.hh"
     "source/string.hh"
+    "source/value.cpp"
     "descript.natvis"
 )
 

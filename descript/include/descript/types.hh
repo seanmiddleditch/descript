@@ -9,7 +9,8 @@
 namespace descript {
     class dsFunctionContext;
     class dsNodeContext;
-    class dsValue;
+    class dsValueTypeId;
+    class dsTypeId;
 
     // user-defined identifiers
     DS_DEFINE_KEY(dsNodeTypeId, uint64_t);
@@ -61,21 +62,13 @@ namespace descript {
         CustomInput,
     };
 
-    enum class dsValueType : uint8_t
-    {
-        Nil,
-        Int32,
-        Float32,
-        Bool,
-    };
-
     struct dsName
     {
         char const* name = nullptr;
         char const* nameEnd = nullptr;
     };
 
-    using dsFunction = dsValue (*)(dsFunctionContext& context, void* userData);
+    using dsFunction = void (*)(dsFunctionContext& context, void* userData);
 
     using dsNodeFunction = void (*)(dsNodeContext& context, dsEventType eventType, void* userData);
 

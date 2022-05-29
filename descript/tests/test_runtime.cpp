@@ -9,10 +9,12 @@
 #include "descript/graph_compiler.hh"
 #include "descript/node.hh"
 #include "descript/runtime.hh"
+#include "descript/value.hh"
 
 #include "array.hh"
 #include "fnv.hh"
 #include "leak_alloc.hh"
+#include "storage.hh"
 #include "utility.hh"
 
 using namespace descript;
@@ -48,9 +50,9 @@ namespace {
     private:
         void Update(dsNodeContext& ctx)
         {
-            dsValue value;
-            if (!ctx.readSlot(conditionSlot, value))
-                value = dsValue{false};
+            dsValueStorage value;
+            if (!ctx.readSlot(conditionSlot, value.out()))
+                value = dsValueStorage{false};
             ctx.setPlugPower(truePlug, value.as<bool>());
             ctx.setPlugPower(falsePlug, !value.as<bool>());
         }
@@ -67,25 +69,25 @@ namespace {
 
         void onActivate(dsNodeContext& ctx) override
         {
-            dsValue value;
-            if (!ctx.readSlot(counterSlot, value))
-                value = dsValue{0};
-            if (!ctx.readSlot(incrementSlot, increment_))
-                increment_ = dsValue{0};
+            dsValueStorage value;
+            if (!ctx.readSlot(counterSlot, value.out()))
+                value = dsValueStorage{0};
+            if (!ctx.readSlot(incrementSlot, increment_.out()))
+                increment_ = dsValueStorage{0};
 
-            ctx.writeSlot(counterSlot, dsValue{value.as<int32_t>() + increment_.as<int32_t>()});
+            ctx.writeSlot(counterSlot, dsValueRef{value.as<int32_t>() + increment_.as<int32_t>()});
         }
 
         void onDeactivate(dsNodeContext& ctx) override
         {
-            dsValue value;
-            if (!ctx.readSlot(counterSlot, value))
-                value = dsValue{0};
-            ctx.writeSlot(counterSlot, dsValue{value.as<int32_t>() - increment_.as<int32_t>()});
+            dsValueStorage value;
+            if (!ctx.readSlot(counterSlot, value.out()))
+                value = dsValueStorage{0};
+            ctx.writeSlot(counterSlot, dsValueRef{value.as<int32_t>() - increment_.as<int32_t>()});
         }
 
     private:
-        dsValue increment_;
+        dsValueStorage increment_;
     };
 
     class CanaryState final : public NodeVirtualBase<CanaryState>
@@ -110,12 +112,12 @@ namespace {
     private:
         void Update(dsNodeContext& ctx)
         {
-            dsValue value;
+            dsValueStorage value;
             uint32_t const numSlots = ctx.numOutputSlots();
             for (uint8_t slotIndex = 0; slotIndex != numSlots; ++slotIndex)
             {
-                if (ctx.readSlot(dsInputSlotIndex{slotIndex}, value))
-                    ctx.writeSlot(dsOutputSlotIndex{(uint8_t)(slotIndex)}, value);
+                if (ctx.readSlot(dsInputSlotIndex{slotIndex}, value.out()))
+                    ctx.writeSlot(dsOutputSlotIndex{(uint8_t)(slotIndex)}, value.ref());
             }
         }
     };
@@ -160,9 +162,9 @@ namespace {
     };
 
     static constexpr dsFunctionCompileMeta functions[] = {
-        {.name = "series", .functionId = dsFunctionId{0}, .returnType = dsValueType::Int32},
-        {.name = "readFlag", .functionId = dsFunctionId{1}, .returnType = dsValueType::Bool},
-        {.name = "readFlagNum", .functionId = dsFunctionId{2}, .returnType = dsValueType::Int32},
+        {.name = "series", .functionId = dsFunctionId{0}, .returnType = dsType<int32_t>},
+        {.name = "readFlag", .functionId = dsFunctionId{1}, .returnType = dsType<bool>},
+        {.name = "readFlagNum", .functionId = dsFunctionId{2}, .returnType = dsType<int32_t>},
     };
 
     class TestCompilerHost final : public dsGraphCompilerHost
@@ -263,24 +265,24 @@ namespace {
         return false;
     }
 
-    static dsValue series(dsFunctionContext& ctx, void* userData)
+    static void series(dsFunctionContext& ctx, void* userData)
     {
         int32_t result = 1;
-        for (uint32_t index = 0; index != ctx.argc(); ++index)
-            result *= ctx.argAt(index).as<int32_t>();
-        return dsValue{result};
+        for (uint32_t index = 0; index != ctx.getArgCount(); ++index)
+            result *= ctx.getArgAt<int32_t>(index);
+        ctx.result(result);
     }
 
-    static dsValue readFlag(dsFunctionContext& ctx, void* userData)
+    static void readFlag(dsFunctionContext& ctx, void* userData)
     {
         ctx.listen(flagEmitterId);
-        return dsValue{flagValue};
+        ctx.result(flagValue);
     }
 
-    static dsValue readFlagNum(dsFunctionContext& ctx, void* userData)
+    static void readFlagNum(dsFunctionContext& ctx, void* userData)
     {
         ctx.listen(flagEmitterId);
-        return dsValue{flagValue ? 1 : 0};
+        ctx.result(flagValue ? 1 : 0);
     }
 } // namespace
 
@@ -316,9 +318,9 @@ TEST_CASE("Graph Compiler", "[runtime]")
     constexpr dsNodeId setResultNodeId{1790};
     constexpr dsNodeId setIncrementNodeId{2000};
 
-    compiler->addVariable(dsValueType::Int32, "Count");
-    compiler->addVariable(dsValueType::Int32, "Result");
-    compiler->addVariable(dsValueType::Int32, "Increment");
+    compiler->addVariable(dsType<int32_t>, "Count");
+    compiler->addVariable(dsType<int32_t>, "Result");
+    compiler->addVariable(dsType<int32_t>, "Increment");
 
     compiler->beginNode(entryNodeId, entryNodeTypeId);
     {
@@ -418,8 +420,8 @@ TEST_CASE("Graph Compiler", "[runtime]")
     assembly = nullptr;
 
     auto readVar = [&](char const* variable) -> double {
-        dsValue value;
-        if (!runtime->readVariable(instanceId, dsName{variable}, value))
+        dsValueStorage value;
+        if (!runtime->readVariable(instanceId, dsName{variable}, value.out()))
             return false;
         if (!value.is<int32_t>())
             return false;

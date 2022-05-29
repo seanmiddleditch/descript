@@ -131,7 +131,7 @@ namespace descript {
     }
 
     static void nullNode(dsNodeContext&, dsEventType, void*) {}
-    static dsValue missingFunction(dsFunctionContext& context, void* userData) { return {}; }
+    static void missingFunction(dsFunctionContext& context, void* userData) {}
 
     dsAssembly* dsLoadAssembly(dsAllocator& alloc, dsRuntimeHost& host, uint8_t const* bytes, uint32_t size)
     {
@@ -148,8 +148,8 @@ namespace descript {
         uint32_t const nodeImplOffset = dsAlign(assemblySize, alignof(dsAssemblyNodeImpl));
         assemblySize = nodeImplOffset + header.nodes.count * sizeof(dsAssemblyNodeImpl);
 
-        uint32_t const constantsOffset = dsAlign(assemblySize, alignof(dsValue));
-        assemblySize = constantsOffset + header.constants.count * sizeof(dsValue);
+        uint32_t const constantsOffset = dsAlign(assemblySize, alignof(dsValueStorage));
+        assemblySize = constantsOffset + header.constants.count * sizeof(dsValueStorage);
 
         uint32_t const functionImplOffset = dsAlign(assemblySize, alignof(dsAssemblyFunctionImpl));
         assemblySize = functionImplOffset + header.functions.count * sizeof(dsAssemblyFunctionImpl);
@@ -179,13 +179,11 @@ namespace descript {
         {
             dsAssemblyConstant const& serialized = header.constants[constantIndex];
 
-            dsValue& deserialized = assembly->constants[constantIndex];
-            switch (serialized.type)
-            {
-            case dsValueType::Nil: deserialized = nullptr; break;
-            case dsValueType::Int32: deserialized = dsBitCast<int32_t>(static_cast<uint32_t>(serialized.serialized)); break;
-            case dsValueType::Float32: deserialized = dsBitCast<float>(static_cast<uint32_t>(serialized.serialized)); break;
-            }
+            dsValueStorage& deserialized = assembly->constants[constantIndex];
+            if (serialized.typeId == dsType<int32_t>.id())
+                deserialized = dsBitCast<int32_t>(static_cast<uint32_t>(serialized.serialized));
+            else if (serialized.typeId == dsType<float>.id())
+                deserialized = dsBitCast<float>(static_cast<uint32_t>(serialized.serialized));
         }
 
         // fill function implementations
