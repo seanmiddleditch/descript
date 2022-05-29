@@ -6,7 +6,6 @@ target_sources(descript_tests PRIVATE
     "test_expression.cpp"
     "test_expression.hh"
     "test_runtime.cpp"
-    "test_uuid.cpp"
 )
 target_include_directories(descript_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../source")
 target_link_libraries(descript_tests PRIVATE descript_catch2 descript)

@@ -11,7 +11,6 @@ add_library(descript
     "include/descript/key.hh"
     "include/descript/runtime.hh"
     "include/descript/types.hh"
-    "include/descript/uuid.hh"
     "include/descript/value.hh"
     "source/alloc.cpp"
     "source/array.hh"
@@ -31,7 +30,6 @@ add_library(descript
     "source/rel.hh"
     "source/runtime.cpp"
     "source/string.hh"
-    "source/uuid.cpp"
     "descript.natvis"
 )
 

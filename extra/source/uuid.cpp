@@ -2,6 +2,7 @@
 
 #include "descript/uuid.hh"
 
+#include <cstring>
 #include <random>
 
 namespace descript {
@@ -75,6 +76,58 @@ namespace descript {
 
         // nul
         result.string[38] = '\0';
+
+        return result;
+    }
+
+    dsUuid dsParseUuid(char const* string, char const* stringEnd) noexcept
+    {
+        dsUuid result;
+
+        if (string == nullptr)
+            return result;
+
+        if (stringEnd == nullptr)
+            stringEnd = string + std::strlen(string);
+
+        bool hasBraces = false;
+        if (string != stringEnd && *string == '{')
+        {
+            hasBraces = true;
+            ++string;
+        }
+
+        uint32_t nibbleIndex = 0;
+        while (string != stringEnd && nibbleIndex != (dsUuid::length << 1))
+        {
+            char const ch = *string++;
+
+            // FIXME: check that the - is in a valid location?
+            if (ch == '-')
+                continue;
+
+            int const value = (ch >= '0' && ch <= '9')   ? ch - '0'
+                              : (ch >= 'a' && ch <= 'f') ? 10 + (ch - 'a')
+                              : (ch >= 'A' && ch <= 'F') ? 10 + (ch - 'A')
+                                                         : -1;
+            if (value == -1)
+                return dsUuid{};
+
+            if ((nibbleIndex & 1) == 0)
+                result.bytes[nibbleIndex++ >> 1] = (value << 4);
+            else
+                result.bytes[nibbleIndex++ >> 1] |= value;
+        }
+
+        if (hasBraces)
+        {
+            if (string == stringEnd || *string != '}')
+                return dsUuid{};
+            ++string;
+        }
+
+        if (string != stringEnd)
+            return dsUuid{};
 
         return result;
     }
