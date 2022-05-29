@@ -4,8 +4,8 @@
 
 #include "descript/alloc.hh"
 #include "descript/assembly.hh"
-#include "descript/compiler.hh"
 #include "descript/context.hh"
+#include "descript/graph_compiler.hh"
 #include "descript/runtime.hh"
 
 #include "array.hh"

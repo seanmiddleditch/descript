@@ -1,16 +1,16 @@
 // descript
 
-#include "descript/compiler.hh"
+#include "descript/graph_compiler.hh"
 
 #include "descript/alloc.hh"
 #include "descript/assembly.hh"
+#include "descript/expression_compiler.hh"
 #include "descript/value.hh"
 
 #include "array.hh"
 #include "assembly_internal.hh"
 #include "assert.hh"
 #include "bit.hh"
-#include "expression_compiler.hh"
 #include "fnv.hh"
 #include "index.hh"
 #include "ops.hh"
@@ -1048,9 +1048,9 @@ namespace descript {
         }
 
         void pushOp(uint8_t byte) override { compiler_.byteCode_.pushBack(byte); }
-        dsExpressionConstantIndex pushConstant(dsValue const& value) override;
-        dsExpressionFunctionIndex pushFunction(dsFunctionId functionId) override;
-        dsExpressionVariableIndex pushVariable(uint64_t nameHash) override;
+        uint32_t pushConstant(dsValue const& value) override;
+        uint32_t pushFunction(dsFunctionId functionId) override;
+        uint32_t pushVariable(uint64_t nameHash) override;
 
     private:
         dsArray<uint64_t> usedVariables_;
@@ -1062,7 +1062,7 @@ namespace descript {
     {
         ExpressionCompilerHost host(*this);
         ExpressionBuilder builder(allocator_, *this);
-        dsExpressionCompiler compiler(allocator_, host);
+        dsExpressionCompiler* compiler = dsCreateExpressionCompiler(allocator_, host);
 
         for (InputBinding const& binding : inputBindings_)
         {
@@ -1093,16 +1093,16 @@ namespace descript {
                 Expression& expression = expressions_[binding.expressionIndex];
 
                 builder.bindSlot(binding.compiledSlotIndex);
-                if (!compiler.compile(expression.expression.cStr()))
+                if (!compiler->compile(expression.expression.cStr()))
                 {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
                     continue;
                 }
 
-                if (compiler.isEmpty())
+                if (compiler->isEmpty())
                     continue;
 
-                if (!compiler.optimize())
+                if (!compiler->optimize())
                 {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
                     continue;
@@ -1110,7 +1110,7 @@ namespace descript {
 
                 expression.byteCodeStart = dsAssemblyByteCodeIndex{byteCode_.size()};
 
-                if (!compiler.build(builder))
+                if (!compiler->build(builder))
                 {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
                     continue;
@@ -1135,6 +1135,8 @@ namespace descript {
                 variable.live = true;
             }
         }
+
+        dsDestroyExpressionCompiler(compiler);
     }
 
     void GraphCompiler::allocateIndices()
@@ -1310,7 +1312,7 @@ namespace descript {
         return dsInvalidIndex;
     }
 
-    dsExpressionVariableIndex GraphCompiler::ExpressionBuilder::pushVariable(uint64_t nameHash)
+    uint32_t GraphCompiler::ExpressionBuilder::pushVariable(uint64_t nameHash)
     {
         for (auto&& [index, variable] : dsEnumerate(compiler_.variables_))
         {
@@ -1340,27 +1342,27 @@ namespace descript {
                 }
             }
 
-            return dsExpressionVariableIndex{index};
+            return index;
         }
 
         DS_ASSERT(false, "Resolved unknown variable id");
-        return dsInvalidIndex;
+        return 0;
     }
 
-    dsExpressionConstantIndex GraphCompiler::ExpressionBuilder::pushConstant(dsValue const& value)
+    uint32_t GraphCompiler::ExpressionBuilder::pushConstant(dsValue const& value)
     {
         // FIXME: implement de-duplication
         uint32_t const index{compiler_.constants_.size()};
         compiler_.constants_.pushBack(value);
-        return dsExpressionConstantIndex{index};
+        return index;
     }
 
-    dsExpressionFunctionIndex GraphCompiler::ExpressionBuilder::pushFunction(dsFunctionId functionId)
+    uint32_t GraphCompiler::ExpressionBuilder::pushFunction(dsFunctionId functionId)
     {
         // FIXME: implement de-duplication
         uint32_t const index{compiler_.functions_.size()};
         compiler_.functions_.pushBack(functionId);
-        return dsExpressionFunctionIndex{index};
+        return index;
     }
 
     bool GraphCompiler::ExpressionCompilerHost::lookupVariable(dsName name, dsValueType& out_type) const noexcept

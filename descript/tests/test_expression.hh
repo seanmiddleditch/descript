@@ -3,11 +3,12 @@
 #pragma once
 
 #include "descript/alloc.hh"
+#include "descript/expression_compiler.hh"
 #include "descript/types.hh"
 #include "descript/value.hh"
 
 #include "array.hh"
-#include "expression_compiler.hh"
+#include "expression.hh"
 #include "fnv.hh"
 #include "utility.hh"
 
@@ -110,9 +111,10 @@ namespace descript::test::expression {
     {
     public:
         explicit ExpressionTester(dsAllocator& alloc, dsSpan<Variable const> variables, dsSpan<Function const> functions) noexcept
-            : byteCode_(alloc), constants_(alloc), variables_(variables), functions_(functions), compiler_(alloc, *this)
+            : byteCode_(alloc), constants_(alloc), variables_(variables), functions_(functions), compiler_(dsCreateExpressionCompiler(alloc, *this))
         {
         }
+        ~ExpressionTester(){dsDestroyExpressionCompiler(compiler_); }
 
         CompileResult compile(char const* expression, dsValueType expectedType);
         CompileResult variable(char const* expression, dsValueType expectedType);
@@ -126,9 +128,9 @@ namespace descript::test::expression {
 
         // dsExpressionBuilder
         void pushOp(uint8_t byte) override { byteCode_.pushBack(byte); }
-        dsExpressionConstantIndex pushConstant(dsValue const& value) override;
-        dsExpressionFunctionIndex pushFunction(dsFunctionId functionId) override;
-        dsExpressionVariableIndex pushVariable(uint64_t nameHash) override;
+        uint32_t pushConstant(dsValue const& value) override;
+        uint32_t pushFunction(dsFunctionId functionId) override;
+        uint32_t pushVariable(uint64_t nameHash) override;
 
         // dsEvaluateHost
         void listen(dsEmitterId) override {}
@@ -141,7 +143,7 @@ namespace descript::test::expression {
         dsArray<dsValue, dsExpressionConstantIndex> constants_;
         dsSpan<Variable const> variables_;
         dsSpan<Function const> functions_;
-        dsExpressionCompiler compiler_;
+        dsExpressionCompiler* compiler_ = nullptr;
     };
 
     std::ostream& operator<<(std::ostream& os, dsValue const& value)
@@ -170,31 +172,31 @@ namespace descript::test::expression {
 
     CompileResult ExpressionTester::compile(char const* expression, dsValueType expectedType)
     {
-        if (!compiler_.compile(expression))
+        if (!compiler_->compile(expression))
             return CompileResult{CompileResult::Code::CompileFailed, expectedType};
-        if (!compiler_.optimize())
+        if (!compiler_->optimize())
             return CompileResult{CompileResult::Code::OptimizeFailed, expectedType};
-        return CompileResult{CompileResult::Code::Success, expectedType, compiler_.resultType()};
+        return CompileResult{CompileResult::Code::Success, expectedType, compiler_->resultType()};
     }
 
     CompileResult ExpressionTester::variable(char const* expression, dsValueType expectedType)
     {
-        if (!compiler_.compile(expression))
+        if (!compiler_->compile(expression))
             return CompileResult{CompileResult::Code::CompileFailed, expectedType};
-        if (!compiler_.optimize())
+        if (!compiler_->optimize())
             return CompileResult{CompileResult::Code::OptimizeFailed, expectedType};
-        if (!compiler_.isVariableOnly())
-            return CompileResult{CompileResult::Code::NotVariableOnly, expectedType, compiler_.resultType()};
-        return CompileResult{CompileResult::Code::Success, expectedType, compiler_.resultType()};
+        if (!compiler_->isVariableOnly())
+            return CompileResult{CompileResult::Code::NotVariableOnly, expectedType, compiler_->resultType()};
+        return CompileResult{CompileResult::Code::Success, expectedType, compiler_->resultType()};
     }
 
     RunResult ExpressionTester::run(char const* expression, dsValue const& expected)
     {
-        if (!compiler_.compile(expression))
+        if (!compiler_->compile(expression))
             return RunResult{RunResult::Code::CompileFailed, expected};
 
         uint32_t const byteCodeOffset = byteCode_.size();
-        if (!compiler_.build(*this))
+        if (!compiler_->build(*this))
             return RunResult{RunResult::Code::BuildFailed, expected};
         dsValue result;
         if (!dsEvaluate(*this, byteCode_.data() + byteCodeOffset, byteCode_.size() - byteCodeOffset, result))
@@ -204,9 +206,9 @@ namespace descript::test::expression {
 
         uint32_t const optimizedByteCodeOffset = byteCode_.size();
 
-        if (!compiler_.optimize())
+        if (!compiler_->optimize())
             return RunResult{RunResult::Code::OptimizeFailed, expected};
-        if (!compiler_.build(*this))
+        if (!compiler_->build(*this))
             return RunResult{RunResult::Code::OptimizedBuildFailed, expected};
         dsValue optimizedResult;
         if (!dsEvaluate(*this, byteCode_.data() + optimizedByteCodeOffset, byteCode_.size() - optimizedByteCodeOffset, optimizedResult))
@@ -219,13 +221,13 @@ namespace descript::test::expression {
 
     RunResult ExpressionTester::constant(char const* expression, dsValue const& expected)
     {
-        if (!compiler_.compile(expression))
+        if (!compiler_->compile(expression))
             return RunResult{RunResult::Code::CompileFailed, expected};
-        if (!compiler_.optimize())
+        if (!compiler_->optimize())
             return RunResult{RunResult::Code::OptimizeFailed, expected};
 
         dsValue actual;
-        if (!compiler_.asConstant(actual))
+        if (!compiler_->asConstant(actual))
             return RunResult{RunResult::Code::NotConstant, expected};
 
         if (actual != expected)
@@ -265,30 +267,28 @@ namespace descript::test::expression {
         return false;
     }
 
-    dsExpressionConstantIndex ExpressionTester::pushConstant(dsValue const& value)
+    uint32_t ExpressionTester::pushConstant(dsValue const& value)
     {
         uint32_t const index{constants_.size()};
         constants_.pushBack(value);
-        return dsExpressionConstantIndex{index};
+        return index;
     }
 
-    dsExpressionVariableIndex ExpressionTester::pushVariable(uint64_t nameHash)
+    uint32_t ExpressionTester::pushVariable(uint64_t nameHash)
     {
         uint32_t nextIndex = 0;
         for (Variable const& variable : variables_)
         {
             if (nameHash == dsHashFnv1a64(variable.name))
-            {
-                return dsExpressionVariableIndex{nextIndex};
-            }
+                return nextIndex;
             ++nextIndex;
         }
-        DS_GUARD_OR(false, dsInvalidIndex, "Invalid variable hash, miscompile");
+        DS_GUARD_OR(false, 0, "Invalid variable hash, miscompile");
     }
 
-    dsExpressionFunctionIndex ExpressionTester::pushFunction(dsFunctionId functionId)
+    uint32_t ExpressionTester::pushFunction(dsFunctionId functionId)
     {
-        return dsExpressionFunctionIndex{static_cast<uint32_t>(functionId.value())};
+        return static_cast<uint32_t>(functionId.value());
     }
 
     bool ExpressionTester::readVariable(dsExpressionVariableIndex variableIndex, dsValue& out_value)

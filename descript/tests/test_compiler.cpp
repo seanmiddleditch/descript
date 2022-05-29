@@ -4,7 +4,7 @@
 
 #include "descript/alloc.hh"
 #include "descript/assembly.hh"
-#include "descript/compiler.hh"
+#include "descript/graph_compiler.hh"
 
 #include "array.hh"
 #include "leak_alloc.hh"
