@@ -11,6 +11,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib")
 enable_testing()
 add_subdirectory(external)
 add_subdirectory(descript)
+add_subdirectory(extra)
 
 if(DESCRIPT_BUILD_SAMPLES)
     add_subdirectory(samples)

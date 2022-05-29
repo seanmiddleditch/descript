@@ -9,6 +9,7 @@ add_library(descript
     "include/descript/graph_compiler.hh"
     "include/descript/hash.hh"
     "include/descript/key.hh"
+    "include/descript/node.hh"
     "include/descript/runtime.hh"
     "include/descript/types.hh"
     "include/descript/value.hh"

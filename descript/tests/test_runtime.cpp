@@ -7,6 +7,7 @@
 #include "descript/context.hh"
 #include "descript/evaluate.hh"
 #include "descript/graph_compiler.hh"
+#include "descript/node.hh"
 #include "descript/runtime.hh"
 
 #include "array.hh"
@@ -21,35 +22,7 @@ namespace {
     static bool flagValue = false;
     static dsEmitterId flagEmitterId = dsInvalidEmitterId;
 
-    template <typename NodeT>
-    class Node
-    {
-    public:
-        virtual void onActivate(dsNodeContext& ctx) = 0;
-        virtual void onCustomInput(dsNodeContext& ctx) {}
-        virtual void onDeactivate(dsNodeContext& ctx) {}
-        virtual void onDependency(dsNodeContext& ctx) {}
-
-        static void dispatch(dsNodeContext& ctx, dsEventType eventType, void* userData)
-        {
-            using namespace descript;
-
-            NodeT* const self = static_cast<NodeT*>(userData);
-
-            switch (eventType)
-            {
-            case dsEventType::Activate: new (self) NodeT(); return self->onActivate(ctx);
-            case dsEventType::CustomInput: return self->onCustomInput(ctx);
-            case dsEventType::Dependency: return self->onDependency(ctx);
-            case dsEventType::Deactivate: return self->onDeactivate(ctx); self->~NodeT();
-            }
-        }
-
-    protected:
-        ~Node() = default;
-    };
-
-    class EmptyState final : public Node<EmptyState>
+    class EmptyState final : public NodeVirtualBase<EmptyState>
     {
     public:
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("EmptyState")};
@@ -58,7 +31,7 @@ namespace {
         void onActivate(dsNodeContext& ctx) override {}
     };
 
-    class ConditionState final : public Node<ConditionState>
+    class ConditionState final : public NodeVirtualBase<ConditionState>
     {
     public:
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("ConditionState")};
@@ -83,7 +56,7 @@ namespace {
         }
     };
 
-    class CounterState final : public Node<CounterState>
+    class CounterState final : public NodeVirtualBase<CounterState>
     {
     public:
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("CounterState")};
@@ -115,7 +88,7 @@ namespace {
         dsValue increment_;
     };
 
-    class CanaryState final : public Node<CanaryState>
+    class CanaryState final : public NodeVirtualBase<CanaryState>
     {
     public:
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("CanaryState")};
@@ -125,7 +98,7 @@ namespace {
         void onDeactivate(dsNodeContext& ctx) override { canaryValue = false; }
     };
 
-    class SetState final : public Node<SetState>
+    class SetState final : public NodeVirtualBase<SetState>
     {
     public:
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("SetState")};
@@ -147,7 +120,7 @@ namespace {
         }
     };
 
-    class ToggleState final : public Node<ToggleState>
+    class ToggleState final : public NodeVirtualBase<ToggleState>
     {
     public:
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("ToggleState")};
