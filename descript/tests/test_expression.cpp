@@ -2,13 +2,13 @@
 
 #include "test_expression.hh"
 
-#include <catch_amalgamated.hpp>
-
+#include "descript/evaluate.hh"
 #include "descript/value.hh"
 
 #include "assembly_internal.hh"
-#include "expression.hh"
 #include "leak_alloc.hh"
+
+#include <catch_amalgamated.hpp>
 
 TEST_CASE("Virtual Machine", "[vm]")
 {

@@ -4,7 +4,7 @@
 #include "schema.hh"
 
 #include <descript/alloc.hh>
-#include <descript/compiler.hh>
+#include <descript/graph_compiler.hh>
 #include <descript/runtime.hh>
 
 #include <GLFW/glfw3.h>

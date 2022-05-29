@@ -1,10 +1,10 @@
 // descript
 
+#include "descript/evaluate.hh"
 #include "descript/value.hh"
 
 #include "array.hh"
 #include "assembly_internal.hh"
-#include "expression.hh"
 #include "ops.hh"
 #include "utility.hh"
 
@@ -12,6 +12,8 @@
 
 namespace descript {
     namespace {
+        static constexpr uint32_t s_stackSize = 32;
+
         class Context final : public dsFunctionContext
         {
         public:
@@ -153,7 +155,7 @@ namespace descript {
     } // namespace
 
 #define DS_CHECKTOP()          \
-    if (stackTop >= stackSize) \
+    if (stackTop >= s_stackSize) \
         return false;          \
     else                       \
         ;
@@ -183,8 +185,7 @@ namespace descript {
 
         uint8_t const* const opsEnd = ops + opsLen;
 
-        constexpr uint32_t stackSize = 32;
-        dsValue stack[stackSize];
+        dsValue stack[s_stackSize];
         uint32_t stackTop = 0;
 
         for (uint8_t const* ip = ops; ip != opsEnd; ++ip)
@@ -238,7 +239,7 @@ namespace descript {
                     return false;
                 index |= *ip;
                 DS_CHECKTOP();
-                if (!host.readConstant(dsExpressionConstantIndex{index}, stack[stackTop]))
+                if (!host.readConstant(index, stack[stackTop]))
                     return false;
                 ++stackTop;
                 break;
@@ -251,7 +252,7 @@ namespace descript {
                     return false;
                 index |= *ip;
                 DS_CHECKTOP();
-                if (!host.readVariable(dsExpressionVariableIndex{index}, stack[stackTop]))
+                if (!host.readVariable(index, stack[stackTop]))
                     return false;
                 ++stackTop;
                 break;
@@ -271,7 +272,7 @@ namespace descript {
 
                 dsValue result;
                 Context ctx(host, argc, stack + (stackTop - argc));
-                if (!host.invokeFunction(dsExpressionFunctionIndex{index}, ctx, result))
+                if (!host.invokeFunction(index, ctx, result))
                     return false;
 
                 stackTop -= argc;

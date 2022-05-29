@@ -2,10 +2,10 @@
 
 #include "descript/expression_compiler.hh"
 
+#include "descript/evaluate.hh"
 #include "descript/value.hh"
 
 #include "array.hh"
-#include "expression.hh"
 #include "fnv.hh"
 #include "index.hh"
 #include "ops.hh"
@@ -1038,17 +1038,17 @@ namespace descript {
                         }
                     }
 
-                    dsExpressionConstantIndex const index{builder.pushConstant(dsValue{static_cast<int32_t>(value)})};
-                    if (index == dsInvalidIndex)
-
+                    uint32_t const index = builder.pushConstant(dsValue{static_cast<int32_t>(value)});
+                    if (index > UINT16_MAX)
                     {
-                        // FIXME: error, constant overflow
+                        // FIXME: error, out of range
+                        // FIXME: ... cant we make this work (yes)
                         return false;
                     }
 
                     builder.pushOp((uint8_t)dsOpCode::PushConstant);
-                    builder.pushOp((uint8_t)(index.value() >> 8));
-                    builder.pushOp((uint8_t)(index.value() & 0xff));
+                    builder.pushOp((uint8_t)(index >> 8));
+                    builder.pushOp((uint8_t)(index & 0xff));
                 }
 
                 return true;
@@ -1058,32 +1058,33 @@ namespace descript {
             {
                 double const value = ast.data.constant.float64_;
 
-                dsExpressionConstantIndex const index{builder.pushConstant(dsValue{static_cast<float>(value)})};
-                if (index == dsInvalidIndex)
-
+                uint32_t const index = builder.pushConstant(dsValue{static_cast<float>(value)});
+                if (index > UINT16_MAX)
                 {
-                    // FIXME: error, constant overflow
+                    // FIXME: error, out of range
+                    // FIXME: ... cant we make this work (yes)
                     return false;
                 }
 
                 builder.pushOp((uint8_t)dsOpCode::PushConstant);
-                builder.pushOp((uint8_t)(index.value() >> 8));
-                builder.pushOp((uint8_t)(index.value() & 0xff));
+                builder.pushOp((uint8_t)(index >> 8));
+                builder.pushOp((uint8_t)(index & 0xff));
                 return true;
             }
 
             DS_GUARD_OR(false, false, "Unexpected literal type");
         case AstType::Variable: {
-            dsExpressionVariableIndex const index{builder.pushVariable(ast.data.variable.nameHash)};
-            if (index == dsInvalidIndex)
+            uint32_t const index = builder.pushVariable(ast.data.variable.nameHash);
+            if (index > UINT16_MAX)
             {
-                // FIXME: error, variable overflow
+                // FIXME: error, out of range
+                // FIXME: ... cant we make this work (yes)
                 return false;
             }
 
             builder.pushOp((uint8_t)dsOpCode::Read);
-            builder.pushOp((uint8_t)(index.value() >> 8));
-            builder.pushOp((uint8_t)(index.value() & 0xff));
+            builder.pushOp((uint8_t)(index >> 8));
+            builder.pushOp((uint8_t)(index & 0xff));
             return true;
         }
         case AstType::BinaryOp:
@@ -1121,16 +1122,17 @@ namespace descript {
                     return false;
             }
 
-            dsExpressionFunctionIndex const index{builder.pushFunction(ast.data.function.functionId)};
-            if (index == dsInvalidIndex)
+            uint32_t const index = builder.pushFunction(ast.data.function.functionId);
+            if (index > UINT16_MAX)
             {
-                // FIXME: error, function overflow
+                // FIXME: error, out of range
+                // FIXME: ... cant we make this work (yes)
                 return false;
             }
 
             builder.pushOp((uint8_t)dsOpCode::Call);
-            builder.pushOp((uint8_t)(index.value() >> 8));
-            builder.pushOp((uint8_t)(index.value() & 0xff));
+            builder.pushOp((uint8_t)(index >> 8));
+            builder.pushOp((uint8_t)(index & 0xff));
             builder.pushOp(ast.data.function.arity);
             return true;
         }

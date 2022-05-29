@@ -13,6 +13,7 @@ Done:
 - [x] Functions
 - [x] External dependency notification
 - [x] Rethink Runtime Host to be a richer extension point for embedding apps
+- [x] Refactor dsEvaluate and dsExpressionCompiler to be public APIs
 
 Todo:
 - [ ] Global event queue
@@ -22,7 +23,6 @@ Todo:
 - [ ] Stack variables
 - [ ] Mitigation for infinite loops
 - [ ] Containers (object that owns/groups multiple instances with a single ID)
-- [ ] Refactor dsExpression and dsExpressionCompiler to be public APIs
 - [ ] Data objects
   - [ ] Messages
   - [ ] Channels

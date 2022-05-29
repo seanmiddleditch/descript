@@ -4,11 +4,11 @@
 
 #include "descript/assembly.hh"
 #include "descript/context.hh"
+#include "descript/evaluate.hh"
 #include "descript/value.hh"
 
 #include "array.hh"
 #include "assembly_internal.hh"
-#include "expression.hh"
 #include "fnv.hh"
 #include "instance.hh"
 
@@ -341,9 +341,9 @@ namespace descript {
 
         void listen(dsEmitterId emitterId) override { runtime_.addListener(instance_.instanceId, inputSlotIndex_.value(), emitterId); }
 
-        bool readConstant(dsExpressionConstantIndex constantIndex, dsValue& out_value) override;
-        bool readVariable(dsExpressionVariableIndex variableIndex, dsValue& out_value) override;
-        bool invokeFunction(dsExpressionFunctionIndex functionIndex, dsFunctionContext& ctx, dsValue& out_result) override;
+        bool readConstant(uint32_t constantIndex, dsValue& out_value) override;
+        bool readVariable(uint32_t variableIndex, dsValue& out_value) override;
+        bool invokeFunction(uint32_t functionIndex, dsFunctionContext& ctx, dsValue& out_result) override;
 
     private:
         Runtime& runtime_;
@@ -353,31 +353,31 @@ namespace descript {
         dsAssemblyInputSlotIndex inputSlotIndex_ = dsInvalidIndex;
     };
 
-    bool Runtime::EvaluateHost::readConstant(dsExpressionConstantIndex constantIndex, dsValue& out_value)
+    bool Runtime::EvaluateHost::readConstant(uint32_t constantIndex, dsValue& out_value)
     {
-        if (constantIndex.value() < instance_.assembly->constants.count)
+        if (constantIndex < instance_.assembly->constants.count)
         {
-            out_value = instance_.assembly->constants[dsAssemblyConstantIndex{constantIndex.value()}];
+            out_value = instance_.assembly->constants[dsAssemblyConstantIndex{constantIndex}];
             return true;
         }
         return false;
     }
 
-    bool Runtime::EvaluateHost::readVariable(dsExpressionVariableIndex variableIndex, dsValue& out_value)
+    bool Runtime::EvaluateHost::readVariable(uint32_t variableIndex, dsValue& out_value)
     {
-        if (variableIndex.value() < instance_.values.count)
+        if (variableIndex < instance_.values.count)
         {
-            out_value = instance_.values[dsAssemblyVariableIndex{variableIndex.value()}];
+            out_value = instance_.values[dsAssemblyVariableIndex{variableIndex}];
             return true;
         }
         return false;
     }
 
-    bool Runtime::EvaluateHost::invokeFunction(dsExpressionFunctionIndex functionIndex, dsFunctionContext& ctx, dsValue& out_result)
+    bool Runtime::EvaluateHost::invokeFunction(uint32_t functionIndex, dsFunctionContext& ctx, dsValue& out_result)
     {
-        if (functionIndex.value() < instance_.assembly->functions.count)
+        if (functionIndex < instance_.assembly->functions.count)
         {
-            dsAssemblyFunctionImpl const& func = instance_.assembly->functions[dsAssemblyFunctionIndex{functionIndex.value()}];
+            dsAssemblyFunctionImpl const& func = instance_.assembly->functions[dsAssemblyFunctionIndex{functionIndex}];
             out_result = func.function(ctx, func.userData);
             return true;
         }

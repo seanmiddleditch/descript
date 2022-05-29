@@ -30,6 +30,7 @@ namespace descript {
                   byteCode_(alloc), errors_(alloc), assemblyBytes_(alloc), graphName_(alloc), debugName_(alloc)
             {
             }
+            ~GraphCompiler() { dsDestroyExpressionCompiler(exprCompiler_); }
 
             void reset() override;
 
@@ -285,6 +286,7 @@ namespace descript {
 
             dsAllocator& allocator_;
             dsCompilerHost& host_;
+            dsExpressionCompiler* exprCompiler_ = nullptr;
             dsArray<NodeIndex> entries_;
             dsArray<Node, NodeIndex> nodes_;
             dsArray<InputPlug, InputPlugIndex> inputPlugs_;
@@ -1062,7 +1064,10 @@ namespace descript {
     {
         ExpressionCompilerHost host(*this);
         ExpressionBuilder builder(allocator_, *this);
-        dsExpressionCompiler* compiler = dsCreateExpressionCompiler(allocator_, host);
+
+        // create expression compiler on demand; we'll cache and reuse across graph compiles
+        if (exprCompiler_ == nullptr)
+            exprCompiler_ = dsCreateExpressionCompiler(allocator_, host);
 
         for (InputBinding const& binding : inputBindings_)
         {
@@ -1085,7 +1090,6 @@ namespace descript {
 
                 ++variable.dependencyCount;
             }
-
             else if (binding.expressionIndex != dsInvalidIndex)
             {
                 DS_ASSERT(binding.variableIndex == dsInvalidIndex);
@@ -1093,16 +1097,16 @@ namespace descript {
                 Expression& expression = expressions_[binding.expressionIndex];
 
                 builder.bindSlot(binding.compiledSlotIndex);
-                if (!compiler->compile(expression.expression.cStr()))
+                if (!exprCompiler_->compile(expression.expression.cStr()))
                 {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
                     continue;
                 }
 
-                if (compiler->isEmpty())
+                if (exprCompiler_->isEmpty())
                     continue;
 
-                if (!compiler->optimize())
+                if (!exprCompiler_->optimize())
                 {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
                     continue;
@@ -1110,7 +1114,7 @@ namespace descript {
 
                 expression.byteCodeStart = dsAssemblyByteCodeIndex{byteCode_.size()};
 
-                if (!compiler->build(builder))
+                if (!exprCompiler_->build(builder))
                 {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
                     continue;
@@ -1135,8 +1139,6 @@ namespace descript {
                 variable.live = true;
             }
         }
-
-        dsDestroyExpressionCompiler(compiler);
     }
 
     void GraphCompiler::allocateIndices()

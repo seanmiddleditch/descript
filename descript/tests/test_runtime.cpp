@@ -5,11 +5,11 @@
 #include "descript/alloc.hh"
 #include "descript/assembly.hh"
 #include "descript/context.hh"
+#include "descript/evaluate.hh"
 #include "descript/graph_compiler.hh"
 #include "descript/runtime.hh"
 
 #include "array.hh"
-#include "expression.hh"
 #include "fnv.hh"
 #include "leak_alloc.hh"
 #include "utility.hh"

@@ -3,12 +3,12 @@
 #pragma once
 
 #include "descript/alloc.hh"
+#include "descript/evaluate.hh"
 #include "descript/expression_compiler.hh"
 #include "descript/types.hh"
 #include "descript/value.hh"
 
 #include "array.hh"
-#include "expression.hh"
 #include "fnv.hh"
 #include "utility.hh"
 
@@ -134,13 +134,13 @@ namespace descript::test::expression {
 
         // dsEvaluateHost
         void listen(dsEmitterId) override {}
-        bool readVariable(dsExpressionVariableIndex variableIndex, dsValue& out_value) override;
-        bool readConstant(dsExpressionConstantIndex constantIndex, dsValue& out_value) override;
-        bool invokeFunction(dsExpressionFunctionIndex functionIndex, dsFunctionContext& ctx, dsValue& out_result) override;
+        bool readVariable(uint32_t variableIndex, dsValue& out_value) override;
+        bool readConstant(uint32_t constantIndex, dsValue& out_value) override;
+        bool invokeFunction(uint32_t functionIndex, dsFunctionContext& ctx, dsValue& out_result) override;
 
     private:
         dsArray<uint8_t> byteCode_;
-        dsArray<dsValue, dsExpressionConstantIndex> constants_;
+        dsArray<dsValue> constants_;
         dsSpan<Variable const> variables_;
         dsSpan<Function const> functions_;
         dsExpressionCompiler* compiler_ = nullptr;
@@ -291,14 +291,14 @@ namespace descript::test::expression {
         return static_cast<uint32_t>(functionId.value());
     }
 
-    bool ExpressionTester::readVariable(dsExpressionVariableIndex variableIndex, dsValue& out_value)
+    bool ExpressionTester::readVariable(uint32_t variableIndex, dsValue& out_value)
     {
-        DS_GUARD_OR(variableIndex.value() < variables_.count, false);
-        out_value = variables_.items[variableIndex.value()].value;
+        DS_GUARD_OR(variableIndex < variables_.count, false);
+        out_value = variables_.items[variableIndex].value;
         return true;
     }
 
-    bool ExpressionTester::readConstant(dsExpressionConstantIndex constantIndex, dsValue& out_value)
+    bool ExpressionTester::readConstant(uint32_t constantIndex, dsValue& out_value)
     {
         if (!constants_.contains(constantIndex))
             return false;
@@ -306,11 +306,11 @@ namespace descript::test::expression {
         return true;
     }
 
-    bool ExpressionTester::invokeFunction(dsExpressionFunctionIndex functionIndex, dsFunctionContext& ctx, dsValue& out_result)
+    bool ExpressionTester::invokeFunction(uint32_t functionIndex, dsFunctionContext& ctx, dsValue& out_result)
     {
-        DS_GUARD_OR(functionIndex.value() < functions_.count, false, "Invalid function index, miscompile");
+        DS_GUARD_OR(functionIndex < functions_.count, false, "Invalid function index, miscompile");
 
-        Function const& func = functions_.items[functionIndex.value()];
+        Function const& func = functions_.items[functionIndex];
         out_result = func.function(ctx, func.userData);
         return true;
     }
