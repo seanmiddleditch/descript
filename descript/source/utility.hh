@@ -87,6 +87,14 @@ namespace descript {
         return dsEnumerated{container.data(), container.size()};
     }
 
+    constexpr bool dsIsEmpty(char const* string, char const* stringEnd = nullptr) noexcept
+    {
+        if (stringEnd == nullptr)
+            return string == nullptr || *string == '\0';
+        else
+            return string == stringEnd;
+    }
+
     constexpr uint32_t dsNameLen(dsName name) noexcept
     {
         if (name.name == nullptr)

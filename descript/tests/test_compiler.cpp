@@ -25,8 +25,6 @@ namespace {
     class TestHost final : public dsCompilerHost
     {
     public:
-        explicit TestHost(dsAllocator& alloc) noexcept : errors_(alloc) {}
-
         bool lookupNodeType(dsNodeTypeId typeId, dsNodeCompileMeta& out_nodeMeta) const noexcept override
         {
             for (dsNodeCompileMeta const& meta : nodes)
@@ -44,18 +42,6 @@ namespace {
         {
             return false;
         }
-
-        void onError(dsCompileError const& error) override
-        {
-            INFO(static_cast<int>(error.code));
-            errors_.pushBack(error);
-        }
-
-        uint32_t errorCount() const noexcept { return errors_.size(); }
-        dsCompileErrorCode errorCode(uint32_t index) { return errors_[index].code; }
-
-    private:
-        dsArray<dsCompileError> errors_;
     };
 } // namespace
 
@@ -63,7 +49,7 @@ TEST_CASE("Graph Compiler", "[compiler][graph]")
 {
     test::LeakTestAllocator alloc;
 
-    TestHost host(alloc);
+    TestHost host;
     dsGraphCompiler* compiler = dsCreateGraphCompiler(alloc, host);
 
     SECTION("Just entry")
@@ -74,7 +60,7 @@ TEST_CASE("Graph Compiler", "[compiler][graph]")
         compiler->addOutputPlug(dsDefaultOutputPlugIndex);
 
         CHECK(compiler->compile());
-        CHECK(host.errorCount() == 0);
+        CHECK(compiler->getErrorCount() == 0);
     }
 
     SECTION("Single simple state")
@@ -91,7 +77,7 @@ TEST_CASE("Graph Compiler", "[compiler][graph]")
         compiler->addWire(entryNode, dsDefaultOutputPlugIndex, stateNode, dsBeginPlugIndex);
 
         CHECK(compiler->compile());
-        CHECK(host.errorCount() == 0);
+        CHECK(compiler->getErrorCount() == 0);
     }
 
     SECTION("Missing entry")
@@ -102,9 +88,9 @@ TEST_CASE("Graph Compiler", "[compiler][graph]")
         compiler->addInputPlug(dsBeginPlugIndex);
 
         CHECK_FALSE(compiler->compile());
-        CHECK(host.errorCount() == 1);
+        CHECK(compiler->getErrorCount() == 1);
 
-        CHECK(host.errorCode(0) == dsCompileErrorCode::NoEntries);
+        CHECK(compiler->getError(0).code == dsCompileErrorCode::NoEntries);
     }
 
     dsDestroyGraphCompiler(compiler);

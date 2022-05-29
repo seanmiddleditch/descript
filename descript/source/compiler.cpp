@@ -33,8 +33,8 @@ namespace descript {
 
             void reset() override;
 
-            void setGraphName(dsName name) override;
-            void setDebugName(dsName name) override;
+            void setGraphName(char const* name, char const* nameEnd = nullptr) override;
+            void setDebugName(char const* name, char const* nameEnd = nullptr) override;
 
             void beginNode(dsNodeId nodeId, dsNodeTypeId nodeTypeId) override;
             void addInputSlot(dsInputSlotIndex slotIndex) override;
@@ -44,15 +44,19 @@ namespace descript {
 
             void addWire(dsNodeId fromNodeId, dsOutputPlugIndex fromPlugIndex, dsNodeId toNodeId, dsInputPlugIndex toPlugIndex) override;
 
-            void addVariable(dsName name, dsValueType type) override;
+            void addVariable(dsValueType type, char const* name, char const* nameEnd) override;
 
-            void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsName name) override;
+            void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* name, char const* nameEnd = nullptr) override;
             void bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression,
                 char const* expressionEnd) override;
-            void bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, dsName name) override;
+            void bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, char const* name,
+                char const* nameEnd = nullptr) override;
 
             bool compile() override;
             bool build() override;
+
+            uint32_t getErrorCount() const noexcept override;
+            dsCompileError getError(uint32_t index) const noexcept override;
 
             uint8_t const* assemblyBytes() const noexcept override { return assemblyBytes_.data(); };
             uint32_t assemblySize() const noexcept override { return assemblyBytes_.size(); }
@@ -331,16 +335,16 @@ namespace descript {
         }
     }
 
-    void GraphCompiler::setGraphName(dsName name)
+    void GraphCompiler::setGraphName(char const* name, char const* nameEnd)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
-        graphName_.reset(name.name, name.nameEnd);
+        graphName_.reset(name, nameEnd);
     }
 
-    void GraphCompiler::setDebugName(dsName name)
+    void GraphCompiler::setDebugName(char const* name, char const* nameEnd)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
-        debugName_.reset(name.name, name.nameEnd);
+        debugName_.reset(name, nameEnd);
     }
 
     void GraphCompiler::beginNode(dsNodeId nodeId, dsNodeTypeId nodeTypeId)
@@ -400,27 +404,25 @@ namespace descript {
         wires_.pushBack(Wire{.fromNodeId = fromNodeId, .toNodeId = toNodeId, .fromPlugIndex = fromPlugIndex, .toPlugIndex = toPlugIndex});
     }
 
-    void GraphCompiler::addVariable(dsName name, dsValueType type)
+    void GraphCompiler::addVariable(dsValueType type, char const* name, char const* nameEnd)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
-        DS_GUARD_VOID(!dsIsNameEmpty(name));
+        DS_GUARD_VOID(!dsIsEmpty(name, nameEnd));
 
-        uint64_t const nameHash = dsHashFnv1a64(name.name, name.nameEnd);
+        uint64_t const nameHash = dsHashFnv1a64(name, nameEnd);
 
-        variables_.pushBack(Variable{.name = dsString(allocator_, name.name, name.nameEnd), .nameHash = nameHash, .type = type});
+        variables_.pushBack(Variable{.name = dsString(allocator_, name, nameEnd), .nameHash = nameHash, .type = type});
     }
 
-    void GraphCompiler::bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsName name)
+    void GraphCompiler::bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* name, char const* nameEnd)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
-        DS_GUARD_VOID(!dsIsNameEmpty(name));
+        DS_GUARD_VOID(!dsIsEmpty(name, nameEnd));
 
-        uint64_t const variableHash = dsHashFnv1a64(name.name, name.nameEnd);
+        uint64_t const variableHash = dsHashFnv1a64(name, nameEnd);
 
-        inputBindings_.pushBack(InputBinding{.nodeId = nodeId,
-            .slotIndex = slotIndex,
-            .name = dsString(allocator_, name.name, name.nameEnd),
-            .nameHash = variableHash});
+        inputBindings_.pushBack(
+            InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .name = dsString(allocator_, name, nameEnd), .nameHash = variableHash});
     }
 
     void GraphCompiler::bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression, char const* expressionEnd)
@@ -434,17 +436,15 @@ namespace descript {
             InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .name = dsString(allocator_), .expressionIndex = exprIndex});
     }
 
-    void GraphCompiler::bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, dsName name)
+    void GraphCompiler::bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, char const* name, char const* nameEnd)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
-        DS_GUARD_VOID(!dsIsNameEmpty(name));
+        DS_GUARD_VOID(!dsIsEmpty(name, nameEnd));
 
-        uint64_t const nameHash = dsHashFnv1a64(name.name, name.nameEnd);
+        uint64_t const nameHash = dsHashFnv1a64(name, nameEnd);
 
-        outputBindings_.pushBack(OutputBinding{.nodeId = nodeId,
-            .slotIndex = slotIndex,
-            .name = dsString(allocator_, name.name, name.nameEnd),
-            .nameHash = nameHash});
+        outputBindings_.pushBack(
+            OutputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .name = dsString(allocator_, name, nameEnd), .nameHash = nameHash});
     }
 
     bool GraphCompiler::compile()
@@ -897,6 +897,14 @@ namespace descript {
         }
     }
 
+    uint32_t GraphCompiler::getErrorCount() const noexcept { return errors_.size(); }
+
+    dsCompileError GraphCompiler::getError(uint32_t index) const noexcept
+    {
+        DS_GUARD_OR(index < errors_.size(), dsCompileError{});
+        return errors_[index];
+    }
+
     void GraphCompiler::findEntries()
     {
         for (auto&& [index, node] : dsEnumerate(nodes_))
@@ -1275,7 +1283,6 @@ namespace descript {
     bool GraphCompiler::error(dsCompileError const& error)
     {
         errors_.pushBack(error);
-        host_.onError(error);
         return false;
     }
 

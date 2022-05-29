@@ -225,12 +225,6 @@ namespace {
             return false;
         }
 
-        void onError(dsCompileError const& error) override
-        {
-            WARN(static_cast<int>(error.code));
-            errors_.pushBack(error);
-        }
-
     private:
         dsArray<dsCompileError> errors_;
     };
@@ -349,9 +343,9 @@ TEST_CASE("Graph Compiler", "[runtime]")
     constexpr dsNodeId setResultNodeId{1790};
     constexpr dsNodeId setIncrementNodeId{2000};
 
-    compiler->addVariable(dsName{"Count"}, dsValueType::Int32);
-    compiler->addVariable(dsName{"Result"}, dsValueType::Int32);
-    compiler->addVariable(dsName{"Increment"}, dsValueType::Int32);
+    compiler->addVariable(dsValueType::Int32, "Count");
+    compiler->addVariable(dsValueType::Int32, "Result");
+    compiler->addVariable(dsValueType::Int32, "Increment");
 
     compiler->beginNode(entryNodeId, entryNodeTypeId);
     {
@@ -406,12 +400,12 @@ TEST_CASE("Graph Compiler", "[runtime]")
     }
 
     compiler->bindSlotExpression(conditionNodeId, ConditionState::conditionSlot, "readFlag()");
-    compiler->bindOutputSlotVariable(counterNodeId, CounterState::counterSlot, dsName{"Count"});
+    compiler->bindOutputSlotVariable(counterNodeId, CounterState::counterSlot, "Count");
     compiler->bindSlotExpression(counterNodeId, CounterState::incrementSlot, "series(2, 1, 2) + readFlagNum()");
     compiler->bindSlotExpression(setResultNodeId, dsInputSlotIndex{0}, "Count * 2");
-    compiler->bindOutputSlotVariable(setResultNodeId, dsOutputSlotIndex{0}, dsName{"Result"});
+    compiler->bindOutputSlotVariable(setResultNodeId, dsOutputSlotIndex{0}, "Result");
     compiler->bindSlotExpression(setIncrementNodeId, dsInputSlotIndex{0}, "Increment + 1");
-    compiler->bindOutputSlotVariable(setIncrementNodeId, dsOutputSlotIndex{0}, dsName{"Increment"});
+    compiler->bindOutputSlotVariable(setIncrementNodeId, dsOutputSlotIndex{0}, "Increment");
 
     compiler->addWire(entryNodeId, dsDefaultOutputPlugIndex, conditionNodeId, dsBeginPlugIndex);
     compiler->addWire(conditionNodeId, ConditionState::truePlug, counterNodeId, dsBeginPlugIndex);

@@ -40,6 +40,14 @@ namespace descript {
         dsNodeKind kind = dsNodeKind::State;
     };
 
+    struct dsFunctionSignature
+    {
+        dsValueType const* paramTypes = nullptr;
+        dsFunctionSignature* next = nullptr;
+        dsValueType returnType = dsValueType::Nil;
+        uint32_t paramCount = 0;
+    };
+
     struct dsFunctionCompileMeta
     {
         char const* name = nullptr;
@@ -52,7 +60,6 @@ namespace descript {
     public:
         virtual bool lookupNodeType(dsNodeTypeId typeId, dsNodeCompileMeta& out_nodeMeta) const noexcept = 0;
         virtual bool lookupFunction(dsName name, dsFunctionCompileMeta& out_functionMeta) const noexcept = 0;
-        virtual void onError(dsCompileError const& error) = 0;
 
     protected:
         ~dsCompilerHost() = default;
@@ -63,8 +70,8 @@ namespace descript {
     public:
         virtual void reset() = 0;
 
-        virtual void setGraphName(dsName name) = 0;
-        virtual void setDebugName(dsName name) = 0;
+        virtual void setGraphName(char const* name, char const* nameEnd = nullptr) = 0;
+        virtual void setDebugName(char const* name, char const* nameEnd = nullptr) = 0;
 
         virtual void beginNode(dsNodeId nodeId, dsNodeTypeId nodeTypeId) = 0;
 
@@ -76,15 +83,19 @@ namespace descript {
 
         virtual void addWire(dsNodeId fromNodeId, dsOutputPlugIndex fromPlugIndex, dsNodeId toNodeId, dsInputPlugIndex toPlugIndex) = 0;
 
-        virtual void addVariable(dsName name, dsValueType type) = 0;
+        virtual void addVariable(dsValueType type, char const* name, char const* nameEnd = nullptr) = 0;
 
-        virtual void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsName name) = 0;
+        virtual void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* name, char const* nameEnd = nullptr) = 0;
         virtual void bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression,
             char const* expressionEnd = nullptr) = 0;
-        virtual void bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, dsName name) = 0;
+        virtual void bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, char const* name,
+            char const* nameEnd = nullptr) = 0;
 
         virtual bool compile() = 0;
         virtual bool build() = 0;
+
+        virtual uint32_t getErrorCount() const noexcept = 0;
+        virtual dsCompileError getError(uint32_t index) const noexcept = 0;
 
         virtual uint8_t const* assemblyBytes() const noexcept = 0;
         virtual uint32_t assemblySize() const noexcept = 0;

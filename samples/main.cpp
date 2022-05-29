@@ -93,7 +93,6 @@ namespace sample {
 
         bool lookupNodeType(dsNodeTypeId typeId, dsNodeCompileMeta& out_nodeMeta) const noexcept override;
         bool lookupFunction(dsName name, dsFunctionCompileMeta& out_functionMeta) const noexcept override;
-        void onError(dsCompileError const& error) override;
 
     private:
         App& app_;
@@ -126,8 +125,6 @@ namespace sample {
     }
 
     bool App::CompileHost::lookupFunction(dsName name, dsFunctionCompileMeta& out_functionMeta) const noexcept { return false; }
-
-    void App::CompileHost::onError(dsCompileError const& error) { app_.log("Error {}", (int)error.code); }
 
     bool App::RuntimeHost::lookupNode(dsNodeTypeId, dsNodeRuntimeMeta& out_meta) const noexcept { return false; }
 
@@ -251,7 +248,7 @@ namespace sample {
         for (auto const& varPtr : graph_->variables)
         {
             if (!varPtr->name.empty())
-                compiler->addVariable(dsName(varPtr->name.c_str()), dsValueType::Int32);
+                compiler->addVariable(dsValueType::Int32, varPtr->name.c_str());
         }
 
         for (auto const& nodePtr : graph_->nodes)
@@ -289,6 +286,12 @@ namespace sample {
 
         bool const result = compiler->compile();
         log("Compile {}", result ? "succeeded" : "failed");
+
+        for (uint32_t index = 0, count = compiler->getErrorCount(); index != count; ++index)
+        {
+            dsCompileError const error = compiler->getError(index);
+            log("Error {}", (int)error.code);
+        }
 
         dsDestroyGraphCompiler(compiler);
     }
