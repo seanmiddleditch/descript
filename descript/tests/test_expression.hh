@@ -154,7 +154,7 @@ namespace descript::test::expression {
         case dsValueType::Int32: return os << "int32(" << value.as<int32_t>() << ')';
         case dsValueType::Float32: return os << "float32(" << value.as<float>() << ')';
         case dsValueType::Bool: return os << (value.as<bool>() ? "true" : "false");
-        default: return os << "unknown(???)";
+        default: return os << "unknown";
         }
     }
 
