@@ -13,10 +13,11 @@
 #include <imgui_impl_opengl3.h>
 #include <imgui_internal.h>
 #include <imgui_node_editor.h>
+#include <imgui_stdlib.h>
 
-#include <format>
 #include <memory>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -24,29 +25,10 @@ using namespace descript;
 
 namespace ned = ax::NodeEditor;
 
-namespace std {
-    template <>
-    struct formatter<sample::graph::Node> : std::formatter<std::string_view>
-    {
-        inline auto format(sample::graph::Node const& node, format_context& ctx);
-    };
-
-    template <>
-    struct formatter<sample::graph::Plug> : std::formatter<std::string_view>
-    {
-        inline auto format(sample::graph::Plug const& plug, format_context& ctx);
-    };
-
-        template <>
-    struct formatter<sample::graph::Link> : std::formatter<std::string_view>
-    {
-            inline auto format(sample::graph::Link const& link, format_context& ctx);
-    };
-} // namespace std
-
 namespace sample::graph {
-    std::ostream& operator<<(std::ostream& os, graph::Node const& node);
-    std::ostream& operator<<(std::ostream& os, graph::Plug const& plug);
+    std::ostream& operator<<(std::ostream& os, Node const& node);
+    std::ostream& operator<<(std::ostream& os, Plug const& plug);
+    std::ostream& operator<<(std::ostream& os, Link const& link);
 } // namespace sample::graph
 
 namespace sample {
@@ -73,7 +55,9 @@ namespace sample {
         template <typename... Args>
         void log(std::string_view format, Args&&... args)
         {
-            logs_.push_back(std::vformat(format, std::make_format_args(std::forward<Args>(args)...)));
+            std::ostringstream os;
+            (os << ... << args);
+            logs_.push_back(os.str());
         }
 
         GLFWwindow* window_ = nullptr;
@@ -365,21 +349,18 @@ namespace sample {
 
         if (ImGui::BeginChildFrame(ImGui::GetID("##variables"), ImVec2(avail.x, avail.y / 2)))
         {
-            char label[32];
-            char buffer[128];
+            std::ostringstream label;
+            std::ostringstream buffer;
             int index = 0;
 
             for (auto& varPtr : graph_->variables)
             {
-                *std::format_to_n(label, sizeof(label) - 1, "Var {}", index++).out = '\0';
+                label.clear();
+                label << "Var " << index++;
 
-                *std::format_to_n(buffer, sizeof(buffer) - 1, "{}", varPtr->name).out = '\0';
-                ImGui::InputText(label, buffer, sizeof(buffer));
+                ImGui::InputText(label.str().c_str(), &varPtr->name, sizeof(buffer));
                 if (ImGui::IsItemDeactivatedAfterEdit())
-                {
-                    varPtr->name = buffer;
                     edits = true;
-                }
             }
 
             if (ImGui::Button("+ Add"))
@@ -428,15 +409,10 @@ namespace sample {
                 ImGui::PushID(slotPtr->schema->index);
                 ImGui::PushID((int)slotPtr->schema->kind);
 
-                char buffer[1024] = {};
-                *std::format_to_n(buffer, sizeof(buffer) - 1, "{}", slotPtr->expression).out = '\0';
                 ImGui::SetNextItemWidth(100);
-                ImGui::InputText("##slot", buffer, sizeof(buffer));
+                ImGui::InputText("##slot", &slotPtr->expression);
                 if (ImGui::IsItemDeactivatedAfterEdit())
-                {
-                    slotPtr->expression = buffer;
                     edits = true;
-                }
                 ImGui::PopID();
                 ImGui::PopID();
             }
@@ -563,24 +539,24 @@ int main(int argc, char** argv)
     return app.run(argc, argv);
 }
 
-auto std::formatter<sample::graph::Node>::format(sample::graph::Node const& node, format_context& ctx)
+std::ostream& sample::graph::operator<<(std::ostream& os, Node const& node)
 {
-    return std::format_to(ctx.out(), "{}#{:x}", node.schema->title, (uintptr_t)&node);
+    return os << node.schema->title << "#" << &node;
 }
 
-auto std::formatter<sample::graph::Plug>::format(sample::graph::Plug const& plug, format_context& ctx)
+std::ostream& sample::graph::operator<<(std::ostream& os, Plug const& plug)
 {
     switch (plug.schema->kind)
     {
-    case sample::schema::PlugKind::Begin: return format_to(ctx.out(), "Begin");
-    case sample::schema::PlugKind::Input: return format_to(ctx.out(), "Input({})", plug.schema->index);
-    case sample::schema::PlugKind::Default: return format_to(ctx.out(), "Default");
-    case sample::schema::PlugKind::Output: return format_to(ctx.out(), "Output({})", plug.schema->index);
-    default: return ctx.out();
+    case sample::schema::PlugKind::Begin: return os << "Begin";
+    case sample::schema::PlugKind::Input: return os << "Input(" << plug.schema->index << ')';
+    case sample::schema::PlugKind::Default: return os << "Default";
+    case sample::schema::PlugKind::Output: return os << "Output(" << plug.schema->index << ')';
+    default: return os;
     }
 }
 
-auto std::formatter<sample::graph::Link>::format(sample::graph::Link const& link, format_context& ctx)
+std::ostream& sample::graph::operator<<(std::ostream& os, Link const& link)
 {
-    return std::format_to(ctx.out(), "{}:{} to {}:{}", *link.fromPlug->node, *link.fromPlug, *link.toPlug->node, *link.toPlug->node);
+    return os << *link.fromPlug->node << ':' << *link.fromPlug << " to " << *link.toPlug->node << ':' << *link.toPlug->node;
 }

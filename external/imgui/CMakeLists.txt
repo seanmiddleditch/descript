@@ -12,11 +12,15 @@ add_library(descript_imgui STATIC EXCLUDE_FROM_ALL
     "imstb_rectpack.h"
     "imstb_textedit.h"
     "imstb_truetype.h"
+    "misc/cpp/imgui_stdlib.cpp"
+    "misc/cpp/imgui_stdlib.h"
 )
 
 target_include_directories(descript_imgui PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/misc/cpp>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/misc/cpp>
 )
 
 add_library(descript_imgui_glfw STATIC EXCLUDE_FROM_ALL
