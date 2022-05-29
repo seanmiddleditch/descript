@@ -130,7 +130,7 @@ namespace descript {
         return hash;
     }
 
-    static void nullNode(dsContext&, dsEventType, void*) {}
+    static void nullNode(dsNodeContext&, dsEventType, void*) {}
     static dsValue missingFunction(dsFunctionContext& context, void* userData) { return {}; }
 
     dsAssembly* dsLoadAssembly(dsAllocator& alloc, dsRuntimeHost& host, uint8_t const* bytes, uint32_t size)

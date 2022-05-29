@@ -124,7 +124,7 @@ namespace descript::test::expression {
     protected:
         // dsExpressionCompilerHost
         bool lookupVariable(dsName name, dsValueType& out_type) const noexcept override;
-        bool lookupFunction(dsName name, dsFunctionId& out_functionId, dsValueType& out_type) const noexcept override;
+        bool lookupFunction(dsName name, dsFunctionCompileMeta& out_meta) const noexcept override;
 
         // dsExpressionBuilder
         void pushOp(uint8_t byte) override { byteCode_.pushBack(byte); }
@@ -250,7 +250,7 @@ namespace descript::test::expression {
         return false;
     }
 
-    bool ExpressionTester::lookupFunction(dsName name, dsFunctionId& out_functionId, dsValueType& out_type) const noexcept
+    bool ExpressionTester::lookupFunction(dsName name, dsFunctionCompileMeta& out_meta) const noexcept
     {
         uint32_t const functionLen = dsNameLen(name);
         uint32_t nextFunctionId = 0;
@@ -258,8 +258,8 @@ namespace descript::test::expression {
         {
             if (functionLen == std::strlen(function.name) && std::strncmp(name.name, function.name, functionLen) == 0)
             {
-                out_functionId = dsFunctionId{nextFunctionId};
-                out_type = function.returnType;
+                out_meta.functionId = dsFunctionId{nextFunctionId};
+                out_meta.returnType = function.returnType;
                 return true;
             }
             ++nextFunctionId;

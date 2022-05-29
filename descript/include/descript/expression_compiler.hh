@@ -3,6 +3,7 @@
 #pragma once
 
 #include "descript/alloc.hh"
+#include "descript/compile_types.hh"
 #include "descript/export.hh"
 #include "descript/types.hh"
 
@@ -13,7 +14,7 @@ namespace descript {
     {
     public:
         virtual bool lookupVariable(dsName name, dsValueType& out_type) const noexcept = 0;
-        virtual bool lookupFunction(dsName name, dsFunctionId& out_functionId, dsValueType& out_type) const noexcept = 0;
+        virtual bool lookupFunction(dsName name, dsFunctionCompileMeta& out_functionMeta) const noexcept = 0;
 
     protected:
         ~dsExpressionCompilerHost() = default;

@@ -1,6 +1,8 @@
 // descript
 
 #include "descript/evaluate.hh"
+
+#include "descript/context.hh"
 #include "descript/value.hh"
 
 #include "array.hh"

@@ -1,9 +1,11 @@
 add_library(descript
     "include/descript/alloc.hh"
     "include/descript/assembly.hh"
+    "include/descript/compile_types.hh"
     "include/descript/context.hh"
     "include/descript/evaluate.hh"
     "include/descript/export.hh"
+    "include/descript/expression_compiler.hh"
     "include/descript/graph_compiler.hh"
     "include/descript/hash.hh"
     "include/descript/key.hh"

@@ -2,6 +2,7 @@
 
 #include "test_expression.hh"
 
+#include "descript/context.hh"
 #include "descript/evaluate.hh"
 #include "descript/value.hh"
 

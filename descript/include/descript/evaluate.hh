@@ -8,18 +8,6 @@
 namespace descript {
     class dsValue;
 
-    class dsFunctionContext
-    {
-    public:
-        virtual uint32_t argc() const noexcept = 0;
-        virtual dsValue const& argAt(uint32_t index) const noexcept = 0;
-
-        virtual void listen(dsEmitterId emitterId) = 0;
-
-    protected:
-        ~dsFunctionContext() = default;
-    };
-
     class dsEvaluateHost
     {
     public:

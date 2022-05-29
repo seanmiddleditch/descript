@@ -258,7 +258,7 @@ namespace descript {
         return nullptr;
     }
 
-    class Runtime::Context final : public dsContext
+    class Runtime::Context final : public dsNodeContext
     {
     public:
         Context(Runtime& runtime, dsInstance& instance, dsAssemblyNodeIndex nodeIndex) noexcept

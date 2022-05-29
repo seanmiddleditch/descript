@@ -86,7 +86,7 @@ namespace sample {
         std::unique_ptr<dsRuntime, decltype(&dsDestroyRuntime)> runtime_ = {nullptr, &dsDestroyRuntime};
     };
 
-    class App::CompileHost final : public descript::dsCompilerHost
+    class App::CompileHost final : public descript::dsGraphCompilerHost
     {
     public:
         explicit CompileHost(App& app) noexcept : app_(app) {}

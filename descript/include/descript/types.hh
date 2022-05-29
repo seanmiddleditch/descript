@@ -4,9 +4,11 @@
 
 #include "descript/key.hh"
 
+#include <cstdint>
+
 namespace descript {
     class dsFunctionContext;
-    class dsContext;
+    class dsNodeContext;
     class dsValue;
 
     // user-defined identifiers
@@ -75,7 +77,7 @@ namespace descript {
 
     using dsFunction = dsValue (*)(dsFunctionContext& context, void* userData);
 
-    using dsNodeFunction = void (*)(dsContext& context, dsEventType eventType, void* userData);
+    using dsNodeFunction = void (*)(dsNodeContext& context, dsEventType eventType, void* userData);
 
     struct dsParam final
     {

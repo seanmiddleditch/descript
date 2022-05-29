@@ -23,7 +23,7 @@ namespace descript {
         class GraphCompiler final : public dsGraphCompiler
         {
         public:
-            explicit GraphCompiler(dsAllocator& alloc, dsCompilerHost& host) noexcept
+            explicit GraphCompiler(dsAllocator& alloc, dsGraphCompilerHost& host) noexcept
                 : allocator_(alloc), host_(host), entries_(alloc), nodes_(alloc), inputPlugs_(alloc), outputPlugs_(alloc), wires_(alloc),
                   inputSlots_(alloc), outputSlots_(alloc), variables_(alloc), dependencies_(alloc), plugWireLinks_(alloc),
                   inputBindings_(alloc), outputBindings_(alloc), expressions_(alloc), constants_(alloc), functions_(alloc),
@@ -285,7 +285,7 @@ namespace descript {
             OutputPlugIndex findPlug(dsNodeId nodeId, dsOutputPlugIndex plugIndex) const noexcept;
 
             dsAllocator& allocator_;
-            dsCompilerHost& host_;
+            dsGraphCompilerHost& host_;
             dsExpressionCompiler* exprCompiler_ = nullptr;
             dsArray<NodeIndex> entries_;
             dsArray<Node, NodeIndex> nodes_;
@@ -321,7 +321,7 @@ namespace descript {
         };
     } // namespace
 
-    dsGraphCompiler* dsCreateGraphCompiler(dsAllocator& alloc, dsCompilerHost& host)
+    dsGraphCompiler* dsCreateGraphCompiler(dsAllocator& alloc, dsGraphCompilerHost& host)
     {
         return new (alloc.allocate(sizeof(GraphCompiler), alignof(GraphCompiler))) GraphCompiler(alloc, host);
     }
@@ -1024,14 +1024,9 @@ namespace descript {
 
         bool lookupVariable(dsName name, dsValueType& out_type) const noexcept override;
 
-        bool lookupFunction(dsName name, dsFunctionId& out_functionId, dsValueType& out_type) const noexcept override
+        bool lookupFunction(dsName name, dsFunctionCompileMeta& out_meta) const noexcept override
         {
-            dsFunctionCompileMeta meta;
-            if (!compiler_.host_.lookupFunction(name, meta))
-                return false;
-            out_functionId = meta.functionId;
-            out_type = meta.returnType;
-            return true;
+            return compiler_.host_.lookupFunction(name, out_meta);
         }
 
     private:

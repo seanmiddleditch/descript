@@ -22,7 +22,7 @@ namespace {
         {.typeId = actionNodeTypeId, .kind = dsNodeKind::Action},
     };
 
-    class TestHost final : public dsCompilerHost
+    class TestHost final : public dsGraphCompilerHost
     {
     public:
         bool lookupNodeType(dsNodeTypeId typeId, dsNodeCompileMeta& out_nodeMeta) const noexcept override

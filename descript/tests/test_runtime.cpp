@@ -25,12 +25,12 @@ namespace {
     class Node
     {
     public:
-        virtual void onActivate(dsContext& ctx) = 0;
-        virtual void onCustomInput(dsContext& ctx) {}
-        virtual void onDeactivate(dsContext& ctx) {}
-        virtual void onDependency(dsContext& ctx) {}
+        virtual void onActivate(dsNodeContext& ctx) = 0;
+        virtual void onCustomInput(dsNodeContext& ctx) {}
+        virtual void onDeactivate(dsNodeContext& ctx) {}
+        virtual void onDependency(dsNodeContext& ctx) {}
 
-        static void dispatch(dsContext& ctx, dsEventType eventType, void* userData)
+        static void dispatch(dsNodeContext& ctx, dsEventType eventType, void* userData)
         {
             using namespace descript;
 
@@ -55,7 +55,7 @@ namespace {
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("EmptyState")};
         static constexpr dsNodeKind kind{dsNodeKind::State};
 
-        void onActivate(dsContext& ctx) override {}
+        void onActivate(dsNodeContext& ctx) override {}
     };
 
     class ConditionState final : public Node<ConditionState>
@@ -69,11 +69,11 @@ namespace {
 
         static constexpr dsInputSlotIndex conditionSlot{0};
 
-        void onActivate(dsContext& ctx) override { Update(ctx); }
-        void onDependency(dsContext& ctx) override { Update(ctx); }
+        void onActivate(dsNodeContext& ctx) override { Update(ctx); }
+        void onDependency(dsNodeContext& ctx) override { Update(ctx); }
 
     private:
-        void Update(dsContext& ctx)
+        void Update(dsNodeContext& ctx)
         {
             dsValue value;
             if (!ctx.readSlot(conditionSlot, value))
@@ -92,7 +92,7 @@ namespace {
         static constexpr dsOutputSlotIndex counterSlot{0};
         static constexpr dsInputSlotIndex incrementSlot{1};
 
-        void onActivate(dsContext& ctx) override
+        void onActivate(dsNodeContext& ctx) override
         {
             dsValue value;
             if (!ctx.readSlot(counterSlot, value))
@@ -103,7 +103,7 @@ namespace {
             ctx.writeSlot(counterSlot, dsValue{value.as<int32_t>() + increment_.as<int32_t>()});
         }
 
-        void onDeactivate(dsContext& ctx) override
+        void onDeactivate(dsNodeContext& ctx) override
         {
             dsValue value;
             if (!ctx.readSlot(counterSlot, value))
@@ -121,8 +121,8 @@ namespace {
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("CanaryState")};
         static constexpr dsNodeKind kind{dsNodeKind::State};
 
-        void onActivate(dsContext& ctx) override { canaryValue = true; }
-        void onDeactivate(dsContext& ctx) override { canaryValue = false; }
+        void onActivate(dsNodeContext& ctx) override { canaryValue = true; }
+        void onDeactivate(dsNodeContext& ctx) override { canaryValue = false; }
     };
 
     class SetState final : public Node<SetState>
@@ -131,11 +131,11 @@ namespace {
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("SetState")};
         static constexpr dsNodeKind kind{dsNodeKind::State};
 
-        void onActivate(dsContext& ctx) override { Update(ctx); }
-        void onDependency(dsContext& ctx) override { Update(ctx); }
+        void onActivate(dsNodeContext& ctx) override { Update(ctx); }
+        void onDependency(dsNodeContext& ctx) override { Update(ctx); }
 
     private:
-        void Update(dsContext& ctx)
+        void Update(dsNodeContext& ctx)
         {
             dsValue value;
             uint32_t const numSlots = ctx.numOutputSlots();
@@ -158,12 +158,12 @@ namespace {
         static constexpr dsOutputPlugIndex enabledPlug{0};
         static constexpr dsOutputPlugIndex disabledPlug{0};
 
-        void onActivate(dsContext& ctx) override
+        void onActivate(dsNodeContext& ctx) override
         {
             ctx.setPlugPower(enabledPlug, toggled_);
             ctx.setPlugPower(disabledPlug, !toggled_);
         }
-        void onCustomInput(dsContext& ctx) override
+        void onCustomInput(dsNodeContext& ctx) override
         {
             toggled_ = !toggled_;
             ctx.setPlugPower(enabledPlug, toggled_);
@@ -192,7 +192,7 @@ namespace {
         {.name = "readFlagNum", .functionId = dsFunctionId{2}, .returnType = dsValueType::Int32},
     };
 
-    class TestCompilerHost final : public dsCompilerHost
+    class TestCompilerHost final : public dsGraphCompilerHost
     {
     public:
         explicit TestCompilerHost(dsAllocator& alloc) noexcept : errors_(alloc) {}

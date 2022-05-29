@@ -788,9 +788,8 @@ namespace descript {
             char const* const identStart = expression_.data() + identToken.offset.value();
             char const* const identEnd = identStart + identToken.length;
 
-            dsFunctionId functionId = dsInvalidFunctionId;
-            dsValueType resultType = dsValueType::Nil;
-            if (!host_.lookupFunction(dsName{identStart, identEnd}, functionId, resultType))
+            dsFunctionCompileMeta meta;
+            if (!host_.lookupFunction(dsName{identStart, identEnd}, meta))
             {
                 // FIXME: error, invalid function
                 return {false, astIndex};
@@ -821,8 +820,8 @@ namespace descript {
 
             Ast& ast = ast_[astIndex];
             ast.type = AstType::Call;
-            ast.valueType = resultType;
-            ast.data = {.function = {.functionId = functionId, .firstArgIndex = firstArgIndex, .arity = arity}};
+            ast.valueType = meta.returnType;
+            ast.data = {.function = {.functionId = meta.functionId, .firstArgIndex = firstArgIndex, .arity = arity}};
             return {success, astIndex};
         }
         default: DS_GUARD_OR(false, LowerResult(false, dsInvalidIndex), "Unknown ast node type");
