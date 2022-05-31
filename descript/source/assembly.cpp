@@ -75,13 +75,22 @@ namespace descript {
             if (slot.variableIndex != dsInvalidIndex)
             {
                 DS_VALIDATE(slot.expressionIndex == dsInvalidIndex);
+                DS_VALIDATE(slot.constantIndex == dsInvalidIndex);
                 DS_VALIDATE(slot.variableIndex.value() < header.variables.count);
             }
 
             if (slot.expressionIndex != dsInvalidIndex)
             {
                 DS_VALIDATE(slot.variableIndex == dsInvalidIndex);
+                DS_VALIDATE(slot.constantIndex == dsInvalidIndex);
                 DS_VALIDATE(slot.expressionIndex.value() < header.expressions.count);
+            }
+
+            if (slot.constantIndex != dsInvalidIndex)
+            {
+                DS_VALIDATE(slot.variableIndex == dsInvalidIndex);
+                DS_VALIDATE(slot.expressionIndex == dsInvalidIndex);
+                DS_VALIDATE(slot.constantIndex.value() < header.constants.count);
             }
 
             if (slot.nodeIndex != dsInvalidIndex)

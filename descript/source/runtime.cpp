@@ -525,15 +525,20 @@ namespace descript {
     {
         DS_ASSERT(nodeIndex.value() < instance.activeNodes.count);
 
-        dsAssemblyHeader const& header = *instance.assembly->header;
+        dsAssembly const& assembly = *instance.assembly;
+        dsAssemblyHeader const& header = *assembly.header;
         dsAssemblyNode const& node = header.nodes[nodeIndex];
         if (slotIndex.value() >= node.inputSlotCount)
             return false;
 
         dsAssemblyInputSlotIndex const inputSlotIndex = node.inputSlotStart + slotIndex.value();
         dsAssemblyInputSlot const& slot = header.inputSlots[inputSlotIndex];
+
         if (slot.variableIndex != dsInvalidIndex)
             return out_value.accept(instance.values[slot.variableIndex].ref());
+
+        if (slot.constantIndex != dsInvalidIndex)
+            return out_value.accept(assembly.constants[slot.constantIndex].ref());
 
         if (slot.expressionIndex != dsInvalidIndex)
         {

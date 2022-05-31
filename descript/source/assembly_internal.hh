@@ -54,6 +54,7 @@ namespace descript {
         // mutually exclusive; FIXME: condense space?
         dsAssemblyVariableIndex variableIndex;
         dsAssemblyExpressionIndex expressionIndex;
+        dsAssemblyConstantIndex constantIndex;
 
         dsAssemblyNodeIndex nodeIndex;
     };

@@ -50,6 +50,8 @@ namespace descript {
             void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* name, char const* nameEnd = nullptr) override;
             void bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression,
                 char const* expressionEnd) override;
+            void bindSlotConstant(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsValueRef const& value) override;
+
             void bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, char const* name,
                 char const* nameEnd = nullptr) override;
 
@@ -231,9 +233,9 @@ namespace descript {
                 // source data
                 dsNodeId nodeId;
                 dsInputSlotIndex slotIndex;
-                dsString name;
-                uint64_t nameHash = 0;
+                dsString variableName;
                 ExpressionIndex expressionIndex = dsInvalidIndex;
+                dsAssemblyConstantIndex constantIndex = dsInvalidIndex;
 
                 // compiled data
                 InputSlotIndex compiledSlotIndex = dsInvalidIndex;
@@ -421,10 +423,8 @@ namespace descript {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
         DS_GUARD_VOID(!dsIsEmpty(name, nameEnd));
 
-        uint64_t const variableHash = dsHashFnv1a64(name, nameEnd);
-
         inputBindings_.pushBack(
-            InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .name = dsString(allocator_, name, nameEnd), .nameHash = variableHash});
+            InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .variableName = dsString(allocator_, name, nameEnd)});
     }
 
     void GraphCompiler::bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression, char const* expressionEnd)
@@ -435,7 +435,29 @@ namespace descript {
         ExpressionIndex const exprIndex{expressions_.size()};
         expressions_.pushBack(Expression{.expression = dsString(allocator_, expression, expressionEnd)});
         inputBindings_.pushBack(
-            InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .name = dsString(allocator_), .expressionIndex = exprIndex});
+            InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .variableName = dsString(allocator_), .expressionIndex = exprIndex});
+    }
+
+    void GraphCompiler::bindSlotConstant(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsValueRef const& value)
+    {
+        DS_GUARD_VOID(status_ == CompileStatus::Reset);
+
+        for (auto&& [index, constant] : dsEnumerate(constants_))
+        {
+            if (constant == value)
+            {
+                inputBindings_.pushBack(InputBinding{.nodeId = nodeId,
+                    .slotIndex = slotIndex,
+                    .variableName = dsString(allocator_),
+                    .constantIndex = dsAssemblyConstantIndex{index}});
+                return;
+            }
+        }
+
+        dsAssemblyConstantIndex const constIndex{constants_.size()};
+        constants_.pushBack(value);
+        inputBindings_.pushBack(
+            InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .variableName = dsString(allocator_), .constantIndex = constIndex});
     }
 
     void GraphCompiler::bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, char const* name, char const* nameEnd)
@@ -620,6 +642,7 @@ namespace descript {
         {
             slot.variableIndex = dsInvalidIndex;
             slot.expressionIndex = dsInvalidIndex;
+            slot.constantIndex = dsInvalidIndex;
             slot.nodeIndex = dsInvalidIndex;
         }
 
@@ -638,16 +661,11 @@ namespace descript {
 
             InputBinding const& binding = inputBindings_[slot.bindingIndex];
             if (binding.variableIndex != dsInvalidIndex)
-            {
-                DS_ASSERT(outSlot.expressionIndex == dsInvalidIndex);
                 outSlot.variableIndex = variables_[binding.variableIndex].index;
-            }
-
-            if (binding.expressionIndex != dsInvalidIndex)
-            {
-                DS_ASSERT(outSlot.variableIndex == dsInvalidIndex);
+            else if (binding.expressionIndex != dsInvalidIndex)
                 outSlot.expressionIndex = expressions_[binding.expressionIndex].index;
-            }
+            else if (binding.constantIndex != dsInvalidIndex)
+                outSlot.constantIndex = binding.constantIndex;
         }
 
         for (OutputSlot const& slot : outputSlots_)
@@ -844,9 +862,11 @@ namespace descript {
             }
             slot.bindingIndex = InputBindingIndex{index};
 
+            uint64_t const nameHash = dsHashFnv1a64(binding.variableName.cStr());
+
             for (auto&& [varIndex, variable] : dsEnumerate(variables_))
             {
-                if (variable.nameHash == binding.nameHash)
+                if (variable.nameHash == nameHash)
                 {
                     binding.variableIndex = VariableIndex{varIndex};
                     break;
@@ -1074,6 +1094,7 @@ namespace descript {
             if (binding.variableIndex != dsInvalidIndex)
             {
                 DS_ASSERT(binding.expressionIndex == dsInvalidIndex);
+                DS_ASSERT(binding.constantIndex == dsInvalidIndex);
 
                 Variable& variable = variables_[binding.variableIndex];
                 variable.live = true;
@@ -1087,6 +1108,7 @@ namespace descript {
             else if (binding.expressionIndex != dsInvalidIndex)
             {
                 DS_ASSERT(binding.variableIndex == dsInvalidIndex);
+                DS_ASSERT(binding.constantIndex == dsInvalidIndex);
 
                 Expression& expression = expressions_[binding.expressionIndex];
 
@@ -1116,6 +1138,11 @@ namespace descript {
 
                 expression.live = true;
                 expression.byteCodeCount = byteCode_.size() - expression.byteCodeStart.value();
+            }
+            else if (binding.constantIndex != dsInvalidIndex)
+            {
+                DS_ASSERT(binding.variableIndex == dsInvalidIndex);
+                DS_ASSERT(binding.expressionIndex == dsInvalidIndex);
             }
         }
 

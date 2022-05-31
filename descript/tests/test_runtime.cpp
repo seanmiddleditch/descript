@@ -310,6 +310,7 @@ TEST_CASE("Graph Compiler", "[runtime]")
     dsGraphCompiler* compiler = dsCreateGraphCompiler(alloc, compilerHost);
 
     constexpr dsNodeId entryNodeId{0};
+    constexpr dsNodeId setInitialNodeId{9834};
     constexpr dsNodeId conditionNodeId{2};
     constexpr dsNodeId counterNodeId{3};
     constexpr dsNodeId unusedNodeId{17};
@@ -318,6 +319,7 @@ TEST_CASE("Graph Compiler", "[runtime]")
     constexpr dsNodeId setResultNodeId{1790};
     constexpr dsNodeId setIncrementNodeId{2000};
 
+    compiler->addVariable(dsType<int32_t>, "Scale");
     compiler->addVariable(dsType<int32_t>, "Count");
     compiler->addVariable(dsType<int32_t>, "Result");
     compiler->addVariable(dsType<int32_t>, "Increment");
@@ -325,6 +327,14 @@ TEST_CASE("Graph Compiler", "[runtime]")
     compiler->beginNode(entryNodeId, entryNodeTypeId);
     {
         compiler->addOutputPlug(dsDefaultOutputPlugIndex);
+    }
+
+    compiler->beginNode(setInitialNodeId, SetState::typeId);
+    {
+        compiler->addInputPlug(dsBeginPlugIndex);
+        compiler->addOutputPlug(dsDefaultOutputPlugIndex);
+        compiler->addOutputSlot(dsOutputSlotIndex{0});
+        compiler->addInputSlot(dsInputSlotIndex{0});
     }
 
     compiler->beginNode(conditionNodeId, ConditionState::typeId);
@@ -374,20 +384,23 @@ TEST_CASE("Graph Compiler", "[runtime]")
         compiler->addInputSlot(dsInputSlotIndex{0});
     }
 
+    compiler->bindOutputSlotVariable(setInitialNodeId, dsOutputSlotIndex{0}, "Scale");
+    compiler->bindSlotConstant(setInitialNodeId, dsInputSlotIndex{0}, 2);
     compiler->bindSlotExpression(conditionNodeId, ConditionState::conditionSlot, "readFlag()");
     compiler->bindOutputSlotVariable(counterNodeId, CounterState::counterSlot, "Count");
     compiler->bindSlotExpression(counterNodeId, CounterState::incrementSlot, "series(2, 1, 2) + readFlagNum()");
-    compiler->bindSlotExpression(setResultNodeId, dsInputSlotIndex{0}, "Count * 2");
+    compiler->bindSlotExpression(setResultNodeId, dsInputSlotIndex{0}, "Count * Scale");
     compiler->bindOutputSlotVariable(setResultNodeId, dsOutputSlotIndex{0}, "Result");
     compiler->bindSlotExpression(setIncrementNodeId, dsInputSlotIndex{0}, "Increment + 1");
     compiler->bindOutputSlotVariable(setIncrementNodeId, dsOutputSlotIndex{0}, "Increment");
 
-    compiler->addWire(entryNodeId, dsDefaultOutputPlugIndex, conditionNodeId, dsBeginPlugIndex);
+    compiler->addWire(entryNodeId, dsDefaultOutputPlugIndex, setInitialNodeId, dsBeginPlugIndex);
+    compiler->addWire(setInitialNodeId, dsDefaultOutputPlugIndex, conditionNodeId, dsBeginPlugIndex);
     compiler->addWire(conditionNodeId, ConditionState::truePlug, counterNodeId, dsBeginPlugIndex);
     compiler->addWire(conditionNodeId, ConditionState::falsePlug, canaryNodeId, dsBeginPlugIndex);
-    compiler->addWire(entryNodeId, dsDefaultOutputPlugIndex, toggleNodeId, dsBeginPlugIndex);
+    compiler->addWire(setInitialNodeId, dsDefaultOutputPlugIndex, toggleNodeId, dsBeginPlugIndex);
     compiler->addWire(conditionNodeId, ConditionState::truePlug, toggleNodeId, ToggleState::togglePlug);
-    compiler->addWire(entryNodeId, dsDefaultOutputPlugIndex, setResultNodeId, dsBeginPlugIndex);
+    compiler->addWire(setInitialNodeId, dsDefaultOutputPlugIndex, setResultNodeId, dsBeginPlugIndex);
     compiler->addWire(conditionNodeId, ConditionState::truePlug, setIncrementNodeId, dsBeginPlugIndex);
 
     REQUIRE(compiler->compile());
