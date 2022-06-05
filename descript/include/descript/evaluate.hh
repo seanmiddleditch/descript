@@ -21,5 +21,5 @@ namespace descript {
         ~dsEvaluateHost() = default;
     };
 
-    DS_API bool dsEvaluate(dsEvaluateHost& host, uint8_t const* ops, uint32_t opsLen, dsValueOut out_value);
+    DS_API [[nodiscard]] bool dsEvaluate(dsEvaluateHost& host, uint8_t const* ops, uint32_t opsLen, dsValueOut out_value);
 } // namespace descript

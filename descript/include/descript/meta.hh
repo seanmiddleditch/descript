@@ -124,12 +124,12 @@ namespace descript {
 
         constexpr explicit operator bool() const noexcept { return meta_->typeId != 0; }
 
-        constexpr uint32_t id() const noexcept { return meta_->typeId; }
-        constexpr dsTypeMeta const& meta() const noexcept { return *meta_; }
+        constexpr [[nodiscard]] uint32_t id() const noexcept { return meta_->typeId; }
+        constexpr [[nodiscard]] dsTypeMeta const& meta() const noexcept { return *meta_; }
 
-        constexpr bool operator==(dsTypeId rhs) const noexcept;
-        constexpr bool operator==(dsTypeMeta const& rhs) const noexcept;
-        constexpr std::strong_ordering operator<=>(dsTypeId rhs) const noexcept;
+        constexpr [[nodiscard]] bool operator==(dsTypeId rhs) const noexcept;
+        constexpr [[nodiscard]] bool operator==(dsTypeMeta const& rhs) const noexcept;
+        constexpr [[nodiscard]] std::strong_ordering operator<=>(dsTypeId rhs) const noexcept;
 
     private:
         dsTypeMeta const* meta_ = &detail_::dsTypeMetaHolder<void>::meta;
@@ -141,7 +141,7 @@ namespace descript {
 
     template <typename T>
     requires dsIsValue<T>
-    constexpr dsTypeId dsTypeOf(T const&) noexcept { return dsType<T>; }
+    constexpr [[nodiscard]] dsTypeId dsTypeOf(T const&) noexcept { return dsType<T>; }
 
     constexpr bool dsTypeId::operator==(dsTypeId rhs) const noexcept
     {

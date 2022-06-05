@@ -38,8 +38,9 @@ namespace descript {
             void setDebugName(char const* name, char const* nameEnd = nullptr) override;
 
             void beginNode(dsNodeId nodeId, dsNodeTypeId nodeTypeId) override;
-            void addInputSlot(dsInputSlotIndex slotIndex) override;
-            void addOutputSlot(dsOutputSlotIndex slotIndex) override;
+            void beginInputSlot(dsInputSlot slot, dsTypeId type) override;
+            void beginOutputSlot(dsOutputSlot slot, dsTypeId type) override;
+
             void addInputPlug(dsInputPlugIndex inputPlugIndex) override;
             void addOutputPlug(dsOutputPlugIndex outputPlugIndex) override;
 
@@ -47,13 +48,9 @@ namespace descript {
 
             void addVariable(dsTypeId type, char const* name, char const* nameEnd) override;
 
-            void bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* name, char const* nameEnd = nullptr) override;
-            void bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression,
-                char const* expressionEnd) override;
-            void bindSlotConstant(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsValueRef const& value) override;
-
-            void bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, char const* name,
-                char const* nameEnd = nullptr) override;
+            void bindVariable(char const* name, char const* nameEnd = nullptr) override;
+            void bindExpression(char const* expression, char const* expressionEnd = nullptr) override;
+            void bindConstant(dsValueRef const& value) override;
 
             bool compile() override;
             bool build() override;
@@ -123,7 +120,8 @@ namespace descript {
             {
                 // source data
                 dsNodeId nodeId;
-                dsInputSlotIndex slotIndex;
+                dsInputSlot inputSlot;
+                dsTypeId type;
 
                 // slot list
                 InputSlotIndex nextSlot = dsInvalidIndex;
@@ -139,7 +137,8 @@ namespace descript {
             {
                 // source data
                 dsNodeId nodeId;
-                dsOutputSlotIndex slotIndex;
+                dsOutputSlot outputSlot;
+                dsTypeId type;
 
                 // slot list
                 OutputSlotIndex nextSlot = dsInvalidIndex;
@@ -231,14 +230,14 @@ namespace descript {
             struct InputBinding
             {
                 // source data
-                dsNodeId nodeId;
-                dsInputSlotIndex slotIndex;
+                InputSlotIndex slotIndex = dsInvalidIndex;
+
+                // source data - only one of these should be set
                 dsString variableName;
                 ExpressionIndex expressionIndex = dsInvalidIndex;
                 dsAssemblyConstantIndex constantIndex = dsInvalidIndex;
 
                 // compiled data
-                InputSlotIndex compiledSlotIndex = dsInvalidIndex;
                 VariableIndex variableIndex = dsInvalidIndex;
                 bool live = false;
             };
@@ -246,13 +245,10 @@ namespace descript {
             struct OutputBinding
             {
                 // source data
-                dsNodeId nodeId;
-                dsOutputSlotIndex slotIndex;
-                dsString name;
-                uint64_t nameHash = 0;
+                OutputSlotIndex slotIndex = dsInvalidIndex;
+                dsString variableName;
 
                 // compiled data
-                OutputSlotIndex compiledSlotIndex = dsInvalidIndex;
                 VariableIndex variableIndex = dsInvalidIndex;
                 bool live = false;
             };
@@ -319,6 +315,8 @@ namespace descript {
             uint32_t compiledDependencyCount_ = 0;
             uint32_t compiledExpressionCount_ = 0;
             NodeIndex openNode_ = dsInvalidIndex;
+            InputSlotIndex openInputSlot_ = dsInvalidIndex;
+            OutputSlotIndex openOutputSlot_ = dsInvalidIndex;
             CompileStatus status_ = CompileStatus::Reset;
         };
     } // namespace
@@ -355,6 +353,9 @@ namespace descript {
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
 
+        openInputSlot_ = dsInvalidIndex;
+        openOutputSlot_ = dsInvalidIndex;
+
         for (auto&& [index, node] : dsEnumerate(nodes_))
         {
             if (node.nodeId == nodeId)
@@ -369,26 +370,55 @@ namespace descript {
         nodes_.pushBack(Node{.nodeId = nodeId, .typeId = nodeTypeId});
     }
 
-    void GraphCompiler::addInputSlot(dsInputSlotIndex slotIndex)
+    void GraphCompiler::beginInputSlot(dsInputSlot slot, dsTypeId type)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
         DS_GUARD_VOID(openNode_ != dsInvalidIndex);
 
-        inputSlots_.pushBack(InputSlot{.nodeId = nodes_[openNode_].nodeId, .slotIndex = slotIndex, .nodeIndex = openNode_});
+        openOutputSlot_ = dsInvalidIndex;
+
+        for (auto&& [index, inputSlot] : dsEnumerate(inputSlots_))
+        {
+            if (inputSlot.nodeIndex == openNode_ && inputSlot.inputSlot == slot)
+            {
+                openInputSlot_ = InputSlotIndex{index};
+                inputSlot.type = type;
+                return;
+            }
+        }
+
+        openInputSlot_ = InputSlotIndex{inputSlots_.size()};
+        inputSlots_.pushBack(InputSlot{.nodeId = nodes_[openNode_].nodeId, .inputSlot = slot, .type = type, .nodeIndex = openNode_});
     }
 
-    void GraphCompiler::addOutputSlot(dsOutputSlotIndex slotIndex)
+    void GraphCompiler::beginOutputSlot(dsOutputSlot slot, dsTypeId type)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
         DS_GUARD_VOID(openNode_ != dsInvalidIndex);
 
-        outputSlots_.pushBack(OutputSlot{.nodeId = nodes_[openNode_].nodeId, .slotIndex = slotIndex, .nodeIndex = openNode_});
+        openInputSlot_ = dsInvalidIndex;
+
+        for (auto&& [index, inputSlot] : dsEnumerate(outputSlots_))
+        {
+            if (inputSlot.nodeIndex == openNode_ && inputSlot.outputSlot == slot)
+            {
+                openOutputSlot_ = OutputSlotIndex{index};
+                inputSlot.type = type;
+                return;
+            }
+        }
+
+        openOutputSlot_ = OutputSlotIndex{outputSlots_.size()};
+        outputSlots_.pushBack(OutputSlot{.nodeId = nodes_[openNode_].nodeId, .outputSlot = slot, .type = type, .nodeIndex = openNode_});
     }
 
     void GraphCompiler::addInputPlug(dsInputPlugIndex inputPlugIndex)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
         DS_GUARD_VOID(openNode_ != dsInvalidIndex);
+
+        openInputSlot_ = dsInvalidIndex;
+        openOutputSlot_ = dsInvalidIndex;
 
         inputPlugs_.pushBack(InputPlug{.nodeId = nodes_[openNode_].nodeId, .inputPlugIndex = inputPlugIndex, .nodeIndex = openNode_});
     }
@@ -398,12 +428,19 @@ namespace descript {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
         DS_GUARD_VOID(openNode_ != dsInvalidIndex);
 
+        openInputSlot_ = dsInvalidIndex;
+        openOutputSlot_ = dsInvalidIndex;
+
         outputPlugs_.pushBack(OutputPlug{.nodeId = nodes_[openNode_].nodeId, .outputPlugIndex = outputPlugIndex, .nodeIndex = openNode_});
     }
 
     void GraphCompiler::addWire(dsNodeId fromNodeId, dsOutputPlugIndex fromPlugIndex, dsNodeId toNodeId, dsInputPlugIndex toPlugIndex)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
+
+        openNode_ = dsInvalidIndex;
+        openInputSlot_ = dsInvalidIndex;
+        openOutputSlot_ = dsInvalidIndex;
 
         wires_.pushBack(Wire{.fromNodeId = fromNodeId, .toNodeId = toNodeId, .fromPlugIndex = fromPlugIndex, .toPlugIndex = toPlugIndex});
     }
@@ -413,62 +450,81 @@ namespace descript {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
         DS_GUARD_VOID(!dsIsEmpty(name, nameEnd));
 
+        openNode_ = dsInvalidIndex;
+        openInputSlot_ = dsInvalidIndex;
+        openOutputSlot_ = dsInvalidIndex;
+
         uint64_t const nameHash = dsHashFnv1a64(name, nameEnd);
 
         variables_.pushBack(Variable{.name = dsString(allocator_, name, nameEnd), .nameHash = nameHash, .type = type});
     }
 
-    void GraphCompiler::bindSlotVariable(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* name, char const* nameEnd)
+    void GraphCompiler::bindVariable(char const* name, char const* nameEnd)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
+        DS_GUARD_VOID(openNode_ != dsInvalidIndex);
+        DS_GUARD_VOID(openInputSlot_ != dsInvalidIndex || openOutputSlot_ != dsInvalidIndex);
         DS_GUARD_VOID(!dsIsEmpty(name, nameEnd));
 
-        inputBindings_.pushBack(
-            InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .variableName = dsString(allocator_, name, nameEnd)});
+        if (openInputSlot_ != dsInvalidIndex)
+        {
+            inputBindings_.pushBack(InputBinding{
+                .slotIndex = openInputSlot_,
+                .variableName = dsString(allocator_, name, nameEnd),
+            });
+        }
+        else
+        {
+            outputBindings_.pushBack(OutputBinding{
+                .slotIndex = openOutputSlot_,
+                .variableName = dsString(allocator_, name, nameEnd),
+            });
+        }
     }
 
-    void GraphCompiler::bindSlotExpression(dsNodeId nodeId, dsInputSlotIndex slotIndex, char const* expression, char const* expressionEnd)
+    void GraphCompiler::bindExpression(char const* expression, char const* expressionEnd)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
-        DS_GUARD_VOID(expression != nullptr);
+        DS_GUARD_VOID(openNode_ != dsInvalidIndex);
+        DS_GUARD_VOID(openInputSlot_ != dsInvalidIndex);
 
         ExpressionIndex const exprIndex{expressions_.size()};
         expressions_.pushBack(Expression{.expression = dsString(allocator_, expression, expressionEnd)});
-        inputBindings_.pushBack(
-            InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .variableName = dsString(allocator_), .expressionIndex = exprIndex});
+        inputBindings_.pushBack(InputBinding{
+            .slotIndex = openInputSlot_,
+            .variableName = dsString(allocator_),
+            .expressionIndex = exprIndex,
+        });
     }
 
-    void GraphCompiler::bindSlotConstant(dsNodeId nodeId, dsInputSlotIndex slotIndex, dsValueRef const& value)
+    void GraphCompiler::bindConstant(dsValueRef const& value)
     {
         DS_GUARD_VOID(status_ == CompileStatus::Reset);
+        DS_GUARD_VOID(openNode_ != dsInvalidIndex);
+        DS_GUARD_VOID(openInputSlot_ != dsInvalidIndex);
 
-        for (auto&& [index, constant] : dsEnumerate(constants_))
+        // FIXME: use a separate table for constant bindings, track liveness,
+        // only emit them if the slot is in use
+        for (auto&& [constantIndex, constant] : dsEnumerate(constants_))
         {
             if (constant == value)
             {
-                inputBindings_.pushBack(InputBinding{.nodeId = nodeId,
-                    .slotIndex = slotIndex,
+                inputBindings_.pushBack(InputBinding{
+                    .slotIndex = openInputSlot_,
                     .variableName = dsString(allocator_),
-                    .constantIndex = dsAssemblyConstantIndex{index}});
+                    .constantIndex = dsAssemblyConstantIndex{constantIndex},
+                });
                 return;
             }
         }
 
-        dsAssemblyConstantIndex const constIndex{constants_.size()};
+        dsAssemblyConstantIndex const constantIndex{constants_.size()};
         constants_.pushBack(value);
-        inputBindings_.pushBack(
-            InputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .variableName = dsString(allocator_), .constantIndex = constIndex});
-    }
-
-    void GraphCompiler::bindOutputSlotVariable(dsNodeId nodeId, dsOutputSlotIndex slotIndex, char const* name, char const* nameEnd)
-    {
-        DS_GUARD_VOID(status_ == CompileStatus::Reset);
-        DS_GUARD_VOID(!dsIsEmpty(name, nameEnd));
-
-        uint64_t const nameHash = dsHashFnv1a64(name, nameEnd);
-
-        outputBindings_.pushBack(
-            OutputBinding{.nodeId = nodeId, .slotIndex = slotIndex, .name = dsString(allocator_, name, nameEnd), .nameHash = nameHash});
+        inputBindings_.pushBack(InputBinding{
+            .slotIndex = openInputSlot_,
+            .variableName = dsString(allocator_),
+            .constantIndex = constantIndex,
+        });
     }
 
     bool GraphCompiler::compile()
@@ -476,6 +532,8 @@ namespace descript {
         DS_GUARD_OR(status_ == CompileStatus::Reset, false);
 
         openNode_ = dsInvalidIndex;
+        openInputSlot_ = dsInvalidIndex;
+        openOutputSlot_ = dsInvalidIndex;
 
         resolveNodes();
         linkElements();
@@ -522,6 +580,9 @@ namespace descript {
         compiledOutputSlotCount_ = 0;
         compiledVariableCount_ = 0;
         compiledDependencyCount_ = 0;
+        openNode_ = dsInvalidIndex;
+        openInputSlot_ = dsInvalidIndex;
+        openOutputSlot_ = dsInvalidIndex;
     }
 
     bool GraphCompiler::build()
@@ -831,36 +892,11 @@ namespace descript {
 
         for (auto&& [index, binding] : dsEnumerate(inputBindings_))
         {
-            NodeIndex const nodeIndex = findNode(binding.nodeId);
-            if (!nodes_.contains(nodeIndex))
-            {
-                error({.code = dsCompileErrorCode::NodeNotFound}); // FIXME: location?
-                continue;
-            }
-
-            for (InputSlotIndex slotIndex = nodes_[nodeIndex].firstInputSlot; inputSlots_.contains(slotIndex);
-                 slotIndex = inputSlots_[slotIndex].nextSlot)
-            {
-                if (inputSlots_[slotIndex].slotIndex == binding.slotIndex)
-                {
-                    binding.compiledSlotIndex = slotIndex;
-                    break;
-                }
-            }
-
-            if (binding.compiledSlotIndex == dsInvalidIndex)
-            {
-                error({.code = dsCompileErrorCode::SlotNotFound}); // FIXME: location
-                continue;
-            }
-
-            InputSlot& slot = inputSlots_[binding.compiledSlotIndex];
-            if (slot.bindingIndex != dsInvalidIndex)
-            {
-                error({.code = dsCompileErrorCode::DuplicateSlotBinding}); // FIXME: location
-                continue;
-            }
+            InputSlot& slot = inputSlots_[binding.slotIndex];
             slot.bindingIndex = InputBindingIndex{index};
+
+            if (binding.variableName.empty())
+                continue;
 
             uint64_t const nameHash = dsHashFnv1a64(binding.variableName.cStr());
 
@@ -876,40 +912,17 @@ namespace descript {
 
         for (auto&& [index, binding] : dsEnumerate(outputBindings_))
         {
-            NodeIndex const nodeIndex = findNode(binding.nodeId);
-            if (!nodes_.contains(nodeIndex))
-            {
-                error({.code = dsCompileErrorCode::NodeNotFound}); // FIXME: location?
-                continue;
-            }
-
-            for (OutputSlotIndex slotIndex = nodes_[nodeIndex].firstOutputSlot; outputSlots_.contains(slotIndex);
-                 slotIndex = outputSlots_[slotIndex].nextSlot)
-            {
-                if (outputSlots_[slotIndex].slotIndex == binding.slotIndex)
-                {
-                    binding.compiledSlotIndex = slotIndex;
-                    break;
-                }
-            }
-
-            if (binding.compiledSlotIndex == dsInvalidIndex)
-            {
-                error({.code = dsCompileErrorCode::SlotNotFound}); // FIXME: location
-                continue;
-            }
-
-            OutputSlot& slot = outputSlots_[binding.compiledSlotIndex];
-            if (slot.bindingIndex != dsInvalidIndex)
-            {
-                error({.code = dsCompileErrorCode::DuplicateSlotBinding}); // FIXME: location
-                continue;
-            }
+            OutputSlot& slot = outputSlots_[binding.slotIndex];
             slot.bindingIndex = OutputBindingIndex{index};
+
+            if (binding.variableName.empty())
+                continue;
+
+            uint64_t const nameHash = dsHashFnv1a64(binding.variableName.cStr());
 
             for (auto&& [varIndex, variable] : dsEnumerate(variables_))
             {
-                if (variable.nameHash == binding.nameHash)
+                if (variable.nameHash == nameHash)
                 {
                     binding.variableIndex = VariableIndex{varIndex};
                     break;
@@ -1088,7 +1101,7 @@ namespace descript {
             if (!binding.live)
                 continue;
 
-            InputSlot& slot = inputSlots_[binding.compiledSlotIndex];
+            InputSlot& slot = inputSlots_[binding.slotIndex];
             slot.live = true;
 
             if (binding.variableIndex != dsInvalidIndex)
@@ -1097,10 +1110,17 @@ namespace descript {
                 DS_ASSERT(binding.constantIndex == dsInvalidIndex);
 
                 Variable& variable = variables_[binding.variableIndex];
+
+                if (variable.type != slot.type)
+                {
+                    error({.code = dsCompileErrorCode::IncompatibleType});
+                    continue;
+                }
+
                 variable.live = true;
 
                 DependencyIndex const depIndex{dependencies_.size()};
-                dependencies_.pushBack(Dependency{.slotIndex = binding.compiledSlotIndex, .nextDependency = variable.firstDependency});
+                dependencies_.pushBack(Dependency{.slotIndex = binding.slotIndex, .nextDependency = variable.firstDependency});
                 variable.firstDependency = depIndex;
 
                 ++variable.dependencyCount;
@@ -1112,7 +1132,7 @@ namespace descript {
 
                 Expression& expression = expressions_[binding.expressionIndex];
 
-                builder.bindSlot(binding.compiledSlotIndex);
+                builder.bindSlot(binding.slotIndex);
                 if (!exprCompiler_->compile(expression.expression.cStr()))
                 {
                     error({.code = dsCompileErrorCode::ExpressionCompileError}); // FIXME: location
@@ -1121,6 +1141,12 @@ namespace descript {
 
                 if (exprCompiler_->isEmpty())
                     continue;
+
+                if (exprCompiler_->resultType() != slot.type)
+                {
+                    error({.code = dsCompileErrorCode::IncompatibleType});
+                    continue;
+                }
 
                 if (!exprCompiler_->optimize())
                 {
@@ -1143,6 +1169,12 @@ namespace descript {
             {
                 DS_ASSERT(binding.variableIndex == dsInvalidIndex);
                 DS_ASSERT(binding.expressionIndex == dsInvalidIndex);
+
+                if (constants_[binding.constantIndex].type() != slot.type)
+                {
+                    error({.code = dsCompileErrorCode::IncompatibleType});
+                    continue;
+                }
             }
         }
 
@@ -1151,7 +1183,7 @@ namespace descript {
             if (!binding.live)
                 continue;
 
-            OutputSlot& slot = outputSlots_[binding.compiledSlotIndex];
+            OutputSlot& slot = outputSlots_[binding.slotIndex];
             slot.live = true;
 
             if (binding.variableIndex != dsInvalidIndex)
@@ -1249,9 +1281,10 @@ namespace descript {
                 InputSlot& slot = inputSlots_[slotIndex];
                 if (slot.live)
                 {
-                    slot.index = node.inputSlotStart + slot.slotIndex.value();
-                    if (slot.slotIndex.value() >= node.inputSlotCount)
-                        node.inputSlotCount = slot.slotIndex.value() + 1;
+                    uint8_t const index = slot.inputSlot.value();
+                    slot.index = node.inputSlotStart + index;
+                    if (index >= node.inputSlotCount)
+                        node.inputSlotCount = index + 1;
                 }
             }
 
@@ -1265,9 +1298,10 @@ namespace descript {
                 OutputSlot& slot = outputSlots_[slotIndex];
                 if (slot.live)
                 {
-                    slot.index = node.outputSlotStart + slot.slotIndex.value();
-                    if (slot.slotIndex.value() >= node.outputSlotCount)
-                        node.outputSlotCount = slot.slotIndex.value() + 1;
+                    uint8_t const index = slot.outputSlot.value();
+                    slot.index = node.outputSlotStart + index;
+                    if (index >= node.outputSlotCount)
+                        node.outputSlotCount = index + 1;
                 }
             }
 

@@ -21,6 +21,7 @@ namespace descript {
         SlotNotFound,
         VariableNotFound,
         ExpressionCompileError,
+        IncompatibleType,
     };
 
     struct dsCompileError final

@@ -42,7 +42,7 @@ namespace {
         static constexpr dsOutputPlugIndex truePlug{0};
         static constexpr dsOutputPlugIndex falsePlug{1};
 
-        static constexpr dsInputSlotIndex conditionSlot{0};
+        static constexpr dsInputSlot conditionSlot = dsInputSlot(0);
 
         void onActivate(dsNodeContext& ctx) override { Update(ctx); }
         void onDependency(dsNodeContext& ctx) override { Update(ctx); }
@@ -64,13 +64,13 @@ namespace {
         static constexpr dsNodeTypeId typeId{dsHashFnv1a64("CounterState")};
         static constexpr dsNodeKind kind{dsNodeKind::State};
 
-        static constexpr dsOutputSlotIndex counterSlot{0};
-        static constexpr dsInputSlotIndex incrementSlot{1};
+        static constexpr dsOutputSlot counterSlot = dsOutputSlot(0);
+        static constexpr dsInputSlot incrementSlot = dsInputSlot(1);
 
         void onActivate(dsNodeContext& ctx) override
         {
             dsValueStorage value;
-            if (!ctx.readSlot(counterSlot, value.out()))
+            if (!ctx.readOutputSlot(counterSlot, value.out()))
                 value = dsValueStorage{0};
             if (!ctx.readSlot(incrementSlot, increment_.out()))
                 increment_ = dsValueStorage{0};
@@ -81,7 +81,7 @@ namespace {
         void onDeactivate(dsNodeContext& ctx) override
         {
             dsValueStorage value;
-            if (!ctx.readSlot(counterSlot, value.out()))
+            if (!ctx.readOutputSlot(counterSlot, value.out()))
                 value = dsValueStorage{0};
             ctx.writeSlot(counterSlot, dsValueRef{value.as<int32_t>() - increment_.as<int32_t>()});
         }
@@ -116,8 +116,8 @@ namespace {
             uint32_t const numSlots = ctx.numOutputSlots();
             for (uint8_t slotIndex = 0; slotIndex != numSlots; ++slotIndex)
             {
-                if (ctx.readSlot(dsInputSlotIndex{slotIndex}, value.out()))
-                    ctx.writeSlot(dsOutputSlotIndex{(uint8_t)(slotIndex)}, value.ref());
+                if (ctx.readSlot(dsInputSlot(slotIndex), value.out()))
+                    ctx.writeSlot(dsOutputSlot(slotIndex), value.ref());
             }
         }
     };
@@ -333,8 +333,15 @@ TEST_CASE("Graph Compiler", "[runtime]")
     {
         compiler->addInputPlug(dsBeginPlugIndex);
         compiler->addOutputPlug(dsDefaultOutputPlugIndex);
-        compiler->addOutputSlot(dsOutputSlotIndex{0});
-        compiler->addInputSlot(dsInputSlotIndex{0});
+
+        compiler->beginInputSlot(dsInputSlot(0), dsType<int32_t>);
+        {
+            compiler->bindConstant(2);
+        }
+        compiler->beginOutputSlot(dsOutputSlot(0), dsType<int32_t>);
+        {
+            compiler->bindVariable("Scale");
+        }
     }
 
     compiler->beginNode(conditionNodeId, ConditionState::typeId);
@@ -342,14 +349,23 @@ TEST_CASE("Graph Compiler", "[runtime]")
         compiler->addInputPlug(dsBeginPlugIndex);
         compiler->addOutputPlug(ConditionState::truePlug);
         compiler->addOutputPlug(ConditionState::falsePlug);
-        compiler->addInputSlot(ConditionState::conditionSlot);
+        compiler->beginInputSlot(ConditionState::conditionSlot, dsType<bool>);
+        {
+            compiler->bindExpression("readFlag()");
+        }
     }
 
     compiler->beginNode(counterNodeId, CounterState::typeId);
     {
         compiler->addInputPlug(dsBeginPlugIndex);
-        compiler->addOutputSlot(CounterState::counterSlot);
-        compiler->addInputSlot(CounterState::incrementSlot);
+        compiler->beginOutputSlot(CounterState::counterSlot, dsType<int32_t>);
+        {
+            compiler->bindVariable("Count");
+        }
+        compiler->beginInputSlot(CounterState::incrementSlot, dsType<int32_t>);
+        {
+            compiler->bindExpression("series(2, 1, 2) + readFlagNum()");
+        }
     }
 
     compiler->beginNode(unusedNodeId, EmptyState::typeId);
@@ -373,26 +389,28 @@ TEST_CASE("Graph Compiler", "[runtime]")
     compiler->beginNode(setResultNodeId, SetState::typeId);
     {
         compiler->addInputPlug(dsBeginPlugIndex);
-        compiler->addOutputSlot(dsOutputSlotIndex{0});
-        compiler->addInputSlot(dsInputSlotIndex{0});
+        compiler->beginInputSlot(dsInputSlot(0), dsType<int32_t>);
+        {
+            compiler->bindExpression("Count * Scale");
+        }
+        compiler->beginOutputSlot(dsOutputSlot(0), dsType<int32_t>);
+        {
+            compiler->bindVariable("Result");
+        }
     }
 
     compiler->beginNode(setIncrementNodeId, SetState::typeId);
     {
         compiler->addInputPlug(dsBeginPlugIndex);
-        compiler->addOutputSlot(dsOutputSlotIndex{0});
-        compiler->addInputSlot(dsInputSlotIndex{0});
+        compiler->beginInputSlot(dsInputSlot(0), dsType<int32_t>);
+        {
+            compiler->bindExpression("Increment + 1");
+        }
+        compiler->beginOutputSlot(dsOutputSlot(0), dsType<int32_t>);
+        {
+            compiler->bindVariable("Increment");
+        }
     }
-
-    compiler->bindOutputSlotVariable(setInitialNodeId, dsOutputSlotIndex{0}, "Scale");
-    compiler->bindSlotConstant(setInitialNodeId, dsInputSlotIndex{0}, 2);
-    compiler->bindSlotExpression(conditionNodeId, ConditionState::conditionSlot, "readFlag()");
-    compiler->bindOutputSlotVariable(counterNodeId, CounterState::counterSlot, "Count");
-    compiler->bindSlotExpression(counterNodeId, CounterState::incrementSlot, "series(2, 1, 2) + readFlagNum()");
-    compiler->bindSlotExpression(setResultNodeId, dsInputSlotIndex{0}, "Count * Scale");
-    compiler->bindOutputSlotVariable(setResultNodeId, dsOutputSlotIndex{0}, "Result");
-    compiler->bindSlotExpression(setIncrementNodeId, dsInputSlotIndex{0}, "Increment + 1");
-    compiler->bindOutputSlotVariable(setIncrementNodeId, dsOutputSlotIndex{0}, "Increment");
 
     compiler->addWire(entryNodeId, dsDefaultOutputPlugIndex, setInitialNodeId, dsBeginPlugIndex);
     compiler->addWire(setInitialNodeId, dsDefaultOutputPlugIndex, conditionNodeId, dsBeginPlugIndex);
@@ -403,7 +421,12 @@ TEST_CASE("Graph Compiler", "[runtime]")
     compiler->addWire(setInitialNodeId, dsDefaultOutputPlugIndex, setResultNodeId, dsBeginPlugIndex);
     compiler->addWire(conditionNodeId, ConditionState::truePlug, setIncrementNodeId, dsBeginPlugIndex);
 
-    REQUIRE(compiler->compile());
+    CHECK(compiler->compile());
+
+    for (uint32_t errorIndex = 0; errorIndex != compiler->getErrorCount(); ++errorIndex)
+        WARN((int)compiler->getError(errorIndex).code);
+    REQUIRE(compiler->getErrorCount() == 0);
+
     REQUIRE(compiler->build());
 
     std::vector<uint8_t> blob(compiler->assemblyBytes(), compiler->assemblyBytes() + compiler->assemblySize());

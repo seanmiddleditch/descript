@@ -11,7 +11,8 @@ namespace descript {
     public:
         constexpr dsValueStorage() noexcept = default;
 
-        dsValueStorage(dsValueRef const& value) noexcept {
+        dsValueStorage(dsValueRef const& value) noexcept
+        {
             type_ = value.type();
             type_.meta().opCopyTo(&storage_, value.pointer());
         }
@@ -23,27 +24,23 @@ namespace descript {
 
         constexpr explicit operator bool() const noexcept { return (bool)type_; }
 
-        constexpr dsTypeId type() const noexcept { return type_; }
+        constexpr [[nodiscard]] dsTypeId type() const noexcept { return type_; }
 
-        void const* pointer() const noexcept { return &storage_; }
+        [[nodiscard]] void const* pointer() const noexcept { return &storage_; }
 
         template <typename T>
         requires dsIsValue<T>
-        constexpr bool is() const noexcept { return type_ == dsType<T>; }
+        constexpr [[nodiscard]] bool is() const noexcept { return type_ == dsType<T>; }
 
         template <typename T>
         requires dsIsValue<T>
         constexpr T as() const noexcept { return *static_cast<T const*>(static_cast<void const*>(&storage_)); }
 
-        dsValueRef ref() const noexcept {
-            return dsValueRef(type_, &storage_);
-        }
+        [[nodiscard]] dsValueRef ref() const noexcept { return dsValueRef(type_, &storage_); }
 
-        dsValueOut out() noexcept {
-            return dsValueOut(&sink, this);
-        }
+        [[nodiscard]] dsValueOut out() noexcept { return dsValueOut(&sink, this); }
 
-        constexpr bool operator==(dsValueStorage const& right) const noexcept
+        constexpr [[nodiscard]] bool operator==(dsValueStorage const& right) const noexcept
         {
             return type_ == right.type_ && type_.meta().opEquality != nullptr && type_.meta().opEquality(&storage_, &right.storage_);
         }

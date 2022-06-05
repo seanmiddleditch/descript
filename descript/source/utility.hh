@@ -87,6 +87,22 @@ namespace descript {
         return dsEnumerated{container.data(), container.size()};
     }
 
+    inline bool dsStrEqual(char const* left, char const* right) noexcept { return std::strcmp(left, right) == 0; }
+
+    constexpr bool dsStrEqual(char const* left, char const* right, char const* rightEnd) noexcept
+    {
+        if (rightEnd == nullptr)
+            return dsStrEqual(left, right);
+
+        while (right != rightEnd && *left != '\0' && *left == *right)
+        {
+            ++left;
+            ++right;
+        }
+
+        return right == rightEnd && *left == '\0';
+    }
+
     constexpr bool dsIsEmpty(char const* string, char const* stringEnd = nullptr) noexcept
     {
         if (stringEnd == nullptr)

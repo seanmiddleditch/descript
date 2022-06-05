@@ -45,17 +45,17 @@ namespace descript {
         virtual void destroyInstance(dsInstanceId instanceId) = 0;
 
         virtual bool writeVariable(dsInstanceId instanceId, dsName variable, dsValueRef const& value) = 0;
-        virtual bool readVariable(dsInstanceId instanceId, dsName variable, dsValueOut out_value) = 0;
+        virtual [[nodiscard]] bool readVariable(dsInstanceId instanceId, dsName variable, dsValueOut out_value) = 0;
 
         virtual void processEvents() = 0;
 
-        virtual dsEmitterId makeEmitterId() = 0;
+        virtual [[nodiscard]] dsEmitterId makeEmitterId() = 0;
         virtual void notifyChange(dsEmitterId emitterId) = 0;
 
     protected:
         ~dsRuntime() = default;
     };
 
-    DS_API dsRuntime* dsCreateRuntime(dsAllocator& alloc, dsRuntimeHost& host);
+    DS_API [[nodiscard]] dsRuntime* dsCreateRuntime(dsAllocator& alloc, dsRuntimeHost& host);
     DS_API void dsDestroyRuntime(dsRuntime* runtime);
 } // namespace descript

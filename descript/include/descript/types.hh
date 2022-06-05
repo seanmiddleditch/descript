@@ -9,7 +9,6 @@
 namespace descript {
     class dsFunctionContext;
     class dsNodeContext;
-    class dsValueTypeId;
     class dsTypeId;
 
     // user-defined identifiers
@@ -18,10 +17,10 @@ namespace descript {
     DS_DEFINE_KEY(dsNodeId, uint64_t);
 
     // user-defined identifiers, unique only within a single node
-    DS_DEFINE_KEY(dsInputSlotIndex, uint8_t);
-    DS_DEFINE_KEY(dsOutputSlotIndex, uint8_t);
     DS_DEFINE_KEY(dsInputPlugIndex, uint8_t);
     DS_DEFINE_KEY(dsOutputPlugIndex, uint8_t);
+    DS_DEFINE_KEY(dsInputSlot, uint8_t);
+    DS_DEFINE_KEY(dsOutputSlot, uint8_t);
 
     // system-defined identifiers
     DS_DEFINE_KEY(dsEmitterId, uint64_t);

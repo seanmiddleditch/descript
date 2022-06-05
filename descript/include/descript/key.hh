@@ -12,10 +12,10 @@ namespace descript {
     public:
         constexpr explicit dsKey(UnderlyingT value) noexcept : value_(value) {}
 
-        constexpr UnderlyingT value() const noexcept { return value_; }
+        constexpr [[nodiscard]] UnderlyingT value() const noexcept { return value_; }
 
-        constexpr std::strong_ordering operator<=>(dsKey const&) const noexcept = default;
-        constexpr bool operator==(dsKey const&) const noexcept = default;
+        constexpr [[nodiscard]] std::strong_ordering operator<=>(dsKey const&) const noexcept = default;
+        constexpr [[nodiscard]] bool operator==(dsKey const&) const noexcept = default;
 
     private:
         UnderlyingT value_;

@@ -40,21 +40,21 @@ namespace descript {
     public:
         virtual void reset() = 0;
 
-        virtual bool compile(char const* expression, char const* expressionEnd = nullptr) = 0;
-        virtual bool optimize() = 0;
-        virtual bool build(dsExpressionBuilder& builder) = 0;
+        virtual [[nodiscard]]bool compile(char const* expression, char const* expressionEnd = nullptr) = 0;
+        virtual [[nodiscard]]bool optimize() = 0;
+        virtual [[nodiscard]]bool build(dsExpressionBuilder& builder) = 0;
 
-        virtual bool isEmpty() const noexcept = 0;
-        virtual bool isConstant() const noexcept = 0;
-        virtual bool isVariableOnly() const noexcept = 0;
-        virtual dsTypeId resultType() const noexcept = 0;
+        virtual [[nodiscard]]bool isEmpty() const noexcept = 0;
+        virtual [[nodiscard]]bool isConstant() const noexcept = 0;
+        virtual [[nodiscard]]bool isVariableOnly() const noexcept = 0;
+        virtual [[nodiscard]]dsTypeId resultType() const noexcept = 0;
 
-        virtual bool asConstant(dsValueOut out_value) const = 0;
+        virtual [[nodiscard]] bool asConstant(dsValueOut out_value) const = 0;
 
     protected:
         ~dsExpressionCompiler() = default;
     };
 
-    DS_API dsExpressionCompiler* dsCreateExpressionCompiler(dsAllocator& alloc, dsExpressionCompilerHost& host);
+    DS_API [[nodiscard]] dsExpressionCompiler* dsCreateExpressionCompiler(dsAllocator& alloc, dsExpressionCompilerHost& host);
     DS_API void dsDestroyExpressionCompiler(dsExpressionCompiler* compiler);
 }; // namespace descript

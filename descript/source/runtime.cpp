@@ -62,9 +62,9 @@ namespace descript {
 
             void setNodePowered(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, bool powered);
 
-            bool readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsInputSlotIndex slotIndex, dsValueOut out_value);
-            bool readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValueOut out_value);
-            bool writeSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValueRef const& value);
+            bool readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsInputSlot inputSlot, dsValueOut out_value);
+            bool readOutputSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlot outputSlot, dsValueOut out_value);
+            bool writeSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlot outputSlot, dsValueRef const& value);
 
             bool writeVariable(dsInstance& instance, uint64_t nameHash, dsValueRef const& value);
             void writeVariable(dsInstance& instance, dsAssemblyVariableIndex variableIndex, dsAssemblyNodeIndex sourceNodeIndex,
@@ -274,10 +274,10 @@ namespace descript {
         uint32_t numInputSlots() const noexcept override;
         uint32_t numOutputSlots() const noexcept override;
 
-        bool readSlot(dsInputSlotIndex slotIndex, dsValueOut out_value) override;
-        bool readSlot(dsOutputSlotIndex slotIndex, dsValueOut out_value) override;
+        bool readSlot(dsInputSlot inputSlot, dsValueOut out_value) override;
+        bool readOutputSlot(dsOutputSlot outputSlot, dsValueOut out_value) override;
 
-        void writeSlot(dsOutputSlotIndex slotIndex, dsValueRef const& value) override;
+        void writeSlot(dsOutputSlot outputSlot, dsValueRef const& value) override;
 
         void setPlugPower(dsOutputPlugIndex plugIndex, bool powered) override;
 
@@ -311,19 +311,19 @@ namespace descript {
         return header.nodes[nodeIndex_].outputSlotCount;
     }
 
-    bool Runtime::Context::readSlot(dsInputSlotIndex slotIndex, dsValueOut out_value)
+    bool Runtime::Context::readSlot(dsInputSlot inputSlot, dsValueOut out_value)
     {
-        return runtime_.readSlot(instance_, nodeIndex_, slotIndex, out_value);
+        return runtime_.readSlot(instance_, nodeIndex_, inputSlot, out_value);
     }
 
-    bool Runtime::Context::readSlot(dsOutputSlotIndex slotIndex, dsValueOut out_value)
+    bool Runtime::Context::readOutputSlot(dsOutputSlot outputSlot, dsValueOut out_value)
     {
-        return runtime_.readSlot(instance_, nodeIndex_, slotIndex, out_value);
+        return runtime_.readOutputSlot(instance_, nodeIndex_, outputSlot, out_value);
     }
 
-    void Runtime::Context::writeSlot(dsOutputSlotIndex slotIndex, dsValueRef const& value)
+    void Runtime::Context::writeSlot(dsOutputSlot outputSlot, dsValueRef const& value)
     {
-        runtime_.writeSlot(instance_, nodeIndex_, slotIndex, value);
+        runtime_.writeSlot(instance_, nodeIndex_, outputSlot, value);
     }
 
     void Runtime::Context::setPlugPower(dsOutputPlugIndex plugIndex, bool powered)
@@ -521,17 +521,17 @@ namespace descript {
             sendLocalEvent(instance, nodeIndex, {.type = dsEventType::Deactivate});
     }
 
-    bool Runtime::readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsInputSlotIndex slotIndex, dsValueOut out_value)
+    bool Runtime::readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsInputSlot inputSlot, dsValueOut out_value)
     {
         DS_ASSERT(nodeIndex.value() < instance.activeNodes.count);
 
         dsAssembly const& assembly = *instance.assembly;
         dsAssemblyHeader const& header = *assembly.header;
         dsAssemblyNode const& node = header.nodes[nodeIndex];
-        if (slotIndex.value() >= node.inputSlotCount)
+        if (inputSlot.value() >= node.inputSlotCount)
             return false;
 
-        dsAssemblyInputSlotIndex const inputSlotIndex = node.inputSlotStart + slotIndex.value();
+        dsAssemblyInputSlotIndex const inputSlotIndex = node.inputSlotStart + inputSlot.value();
         dsAssemblyInputSlot const& slot = header.inputSlots[inputSlotIndex];
 
         if (slot.variableIndex != dsInvalidIndex)
@@ -555,32 +555,32 @@ namespace descript {
         return false;
     }
 
-    bool Runtime::readSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValueOut out_value)
+    bool Runtime::readOutputSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlot outputSlot, dsValueOut out_value)
     {
         DS_ASSERT(nodeIndex.value() < instance.activeNodes.count);
 
         dsAssemblyHeader const& header = *instance.assembly->header;
         dsAssemblyNode const& node = header.nodes[nodeIndex];
-        if (slotIndex.value() >= node.inputSlotCount)
+        if (outputSlot.value() >= node.inputSlotCount)
             return false;
 
-        dsAssemblyOutputSlot const& slot = header.outputSlots[node.outputSlotStart + slotIndex.value()];
+        dsAssemblyOutputSlot const& slot = header.outputSlots[node.outputSlotStart + outputSlot.value()];
         if (slot.variableIndex != dsInvalidIndex)
             return out_value.accept(instance.values[slot.variableIndex].ref());
 
         return false;
     }
 
-    bool Runtime::writeSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlotIndex slotIndex, dsValueRef const& value)
+    bool Runtime::writeSlot(dsInstance& instance, dsAssemblyNodeIndex nodeIndex, dsOutputSlot outputSlot, dsValueRef const& value)
     {
         DS_ASSERT(nodeIndex.value() < instance.activeNodes.count);
 
         dsAssemblyHeader const& header = *instance.assembly->header;
         dsAssemblyNode const& node = header.nodes[nodeIndex];
-        if (slotIndex.value() >= node.outputSlotCount)
+        if (outputSlot.value() >= node.outputSlotCount)
             return false;
 
-        dsAssemblyOutputSlot const& slot = header.outputSlots[node.outputSlotStart + slotIndex.value()];
+        dsAssemblyOutputSlot const& slot = header.outputSlots[node.outputSlotStart + outputSlot.value()];
         if (slot.variableIndex == dsInvalidIndex)
             return false;
 

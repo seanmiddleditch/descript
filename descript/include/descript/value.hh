@@ -21,22 +21,22 @@ namespace descript {
 
         dsValueRef(dsValueRef const&) = delete;
 
-        dsTypeId type() const noexcept { return type_; }
-        void const* pointer() const noexcept { return pointer_; }
+        [[nodiscard]] dsTypeId type() const noexcept { return type_; }
+        [[nodiscard]] void const* pointer() const noexcept { return pointer_; }
 
-        bool is(dsTypeId type) const noexcept { return type_ == type; }
+        [[nodiscard]] bool is(dsTypeId type) const noexcept { return type_ == type; }
 
         template <typename T>
         requires dsIsValue<T>
-        bool is() const noexcept { return is(dsTypeOf<T>()); }
+        [[nodiscard]] bool is() const noexcept { return is(dsTypeOf<T>()); }
 
         template <typename T>
-        requires dsIsValue<T> T as()
-        const noexcept { return *static_cast<T const*>(static_cast<void const*>(pointer_)); }
+        requires dsIsValue<T>
+        [[nodiscard]] T as() const noexcept { return *static_cast<T const*>(static_cast<void const*>(pointer_)); }
 
         dsValueRef& operator=(dsValueRef const&) = delete;
 
-        DS_API bool operator==(dsValueRef const& right) const noexcept;
+        DS_API [[nodiscard]] bool operator==(dsValueRef const& right) const noexcept;
 
     private:
         dsTypeId type_;
@@ -51,13 +51,13 @@ namespace descript {
         template <typename T>
         dsValueOut& operator=(T const&) = delete;
 
-        bool accept(dsValueRef const& value) { return accept(value.type(), value.pointer()); }
+        [[nodiscard]] bool accept(dsValueRef const& value) { return accept(value.type(), value.pointer()); }
 
         template <typename T>
         requires dsIsValue<T>
-        bool accept(T const& value) { return accept(dsType<T>, &value); }
+        [[nodiscard]] bool accept(T const& value) { return accept(dsType<T>, &value); }
 
-        DS_API bool accept(dsTypeId type, void const* pointer);
+        DS_API [[nodiscard]] bool accept(dsTypeId type, void const* pointer);
 
     private:
         dsValueSink sink_ = nullptr;

@@ -8,6 +8,7 @@
 namespace descript {
     static constexpr struct
     {
+        constexpr explicit operator uint32_t() const noexcept { return ~uint32_t{0u}; }
     } dsInvalidIndex;
 
     template <typename DerivedT>

@@ -53,7 +53,7 @@ namespace sample {
         bool drawGraph();
 
         template <typename... Args>
-        void log(std::string_view format, Args&&... args)
+        void log(Args const&... args)
         {
             std::ostringstream os;
             (os << ... << args);
@@ -194,7 +194,16 @@ namespace sample {
             schema_->createPlug(condition, "out", PlugKind::Default, 0);
             schema_->createPlug(condition, "in0", PlugKind::Input, 0);
             schema_->createPlug(condition, "out0", PlugKind::Output, 0);
-            schema_->createSlot(condition, "keyval", SlotKind::Pair, 0);
+            schema_->createSlot(condition, "test", SlotKind::Input, 0);
+        }
+
+        {
+            Node& condition = schema_->createNode("set", NodeKind::State);
+            condition.title = "Set";
+            schema_->createPlug(condition, "begin", PlugKind::Begin, 0);
+            schema_->createPlug(condition, "out", PlugKind::Default, 0);
+            schema_->createSlot(condition, "dest", SlotKind::Output, 0);
+            schema_->createSlot(condition, "source", SlotKind::Input, 0);
         }
 
         {
@@ -203,6 +212,7 @@ namespace sample {
             schema_->createPlug(print, "begin", PlugKind::Begin, 0);
             schema_->createPlug(print, "out", PlugKind::Default, 0);
             schema_->createPlug(print, "in0", PlugKind::Input, 0);
+            schema_->createSlot(print, "value", SlotKind::Input, 0);
         }
     }
 
@@ -252,9 +262,10 @@ namespace sample {
 
             for (auto const& slotPtr : nodePtr->slots)
             {
-                compiler->addInputSlot(dsInputSlotIndex{slotPtr->schema->index});
-                compiler->bindSlotExpression(dsNodeId{(uintptr_t)nodePtr.get()}, dsInputSlotIndex{slotPtr->schema->index},
-                    slotPtr->expression.c_str());
+                compiler->beginInputSlot(dsInputSlot(slotPtr->schema->index), dsType<int32_t>);
+                {
+                    compiler->bindExpression(slotPtr->expression.c_str());
+                }
             }
         }
 
@@ -269,12 +280,12 @@ namespace sample {
         }
 
         bool const result = compiler->compile();
-        log("Compile {}", result ? "succeeded" : "failed");
+        log("Compile ", result ? "succeeded" : "failed");
 
         for (uint32_t index = 0, count = compiler->getErrorCount(); index != count; ++index)
         {
             dsCompileError const error = compiler->getError(index);
-            log("Error {}", (int)error.code);
+            log("Error ", (int)error.code);
         }
 
         dsDestroyGraphCompiler(compiler);
@@ -385,6 +396,7 @@ namespace sample {
         for (auto& nodePtr : graph_->nodes)
         {
             ned::BeginNode(ned::NodeId(nodePtr.get()));
+            ImGui::PushID(nodePtr.get());
             ImGui::Text("%s#%llx", nodePtr->schema->title.c_str(), (uintptr_t)nodePtr.get());
 
             for (auto& plugPtr : nodePtr->plugs)
@@ -417,6 +429,7 @@ namespace sample {
                 ImGui::PopID();
             }
 
+            ImGui::PopID();
             ned::EndNode();
         }
 
@@ -452,10 +465,12 @@ namespace sample {
                 }
                 else if (ned::AcceptNewItem())
                 {
-
                     graph::Link* link = graph_->createLink(fromPlug, toPlug);
-                    log("Created link {}", *link);
-                    edits = true;
+                    if (link != nullptr)
+                    {
+                        log("Created link ", *link);
+                        edits = true;
+                    }
                 }
             }
 
@@ -479,8 +494,8 @@ namespace sample {
             {
                 if (ned::AcceptDeletedItem())
                 {
-                    graph::Link* link = graph_->findLink(linkId.Get());
-                    log("Deleting link {}", *link);
+                    graph::Link* link = linkId.AsPointer<graph::Link>();
+                    log("Deleting link ", *link);
                     graph_->destroyLink(link);
                     edits = true;
                 }
@@ -490,8 +505,8 @@ namespace sample {
             {
                 if (ned::AcceptDeletedItem())
                 {
-                    graph::Node* node = graph_->findNode(nodeId.Get());
-                    log("Deleting node {}", *node);
+                    graph::Node* node = nodeId.AsPointer<graph::Node>();
+                    log("Deleting node ", *node);
                     graph_->destroyNode(node);
                     edits = true;
                 }
@@ -512,13 +527,13 @@ namespace sample {
                 if (ImGui::MenuItem(nodeSchemaPtr->title.c_str()))
                 {
                     graph::Node* node = graph_->createNode(nodeSchemaPtr->name);
-                    log("Created node {}", *node);
+                    log("Created node ", *node);
                     ned::SetNodePosition(ned::NodeId(node), ned::ScreenToCanvas(mousePos));
                     if (newNodeFromPin_)
                     {
                         graph::Plug* fromPlug = newNodeFromPin_.AsPointer<graph::Plug>();
                         graph::Link* link = graph_->createLink(fromPlug, node->plugs.front().get());
-                        log("Created link {}", *link);
+                        log("Created link ", *link);
                     }
                     newNodeFromPin_ = {};
                     edits = true;

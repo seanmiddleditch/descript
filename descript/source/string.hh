@@ -17,18 +17,20 @@ namespace descript {
 
         dsString(dsString&& rhs) noexcept : allocator_(rhs.allocator_), first_(rhs.first_), last_(rhs.last_)
         {
-            rhs.first_ = rhs.last_ = empty;
+            rhs.first_ = rhs.last_ = emptyString;
         }
         dsString& operator=(dsString&& rhs) noexcept
         {
             allocator_ = rhs.allocator_;
             first_ = rhs.first_;
             last_ = rhs.last_;
-            rhs.first_ = rhs.last_ = empty;
+            rhs.first_ = rhs.last_ = emptyString;
             return *this;
         }
 
         ~dsString() { reset(); }
+
+        bool empty() const noexcept { return first_ == last_; }
 
         char const* cStr() const noexcept { return first_; }
 
@@ -44,18 +46,18 @@ namespace descript {
 
     private:
         // to avoid allocating for empty strings
-        static constexpr char empty[] = "";
+        static constexpr char emptyString[] = "";
 
         dsAllocator* allocator_ = nullptr;
-        char const* first_ = empty;
-        char const* last_ = empty;
+        char const* first_ = emptyString;
+        char const* last_ = emptyString;
     };
 
     void dsString::reset()
     {
         if (*first_ != '\0')
             allocator_->free(const_cast<char*>(first_), last_ - first_ + 1 /*NUL*/, 1);
-        first_ = last_ = empty;
+        first_ = last_ = emptyString;
     }
 
     void dsString::reset(char const* string, char const* sentinel)

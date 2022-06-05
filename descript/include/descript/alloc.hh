@@ -10,7 +10,7 @@ namespace descript {
     class dsAllocator
     {
     public:
-        virtual void* allocate(uint32_t size, uint32_t alignment) = 0;
+        virtual [[nodiscard]] void* allocate(uint32_t size, uint32_t alignment) = 0;
         virtual void free(void* block, uint32_t size, uint32_t alignment) = 0;
 
     protected:
@@ -20,7 +20,7 @@ namespace descript {
     class DS_API dsDefaultAllocator final : public dsAllocator
     {
     public:
-        void* allocate(uint32_t size, uint32_t alignment) override;
+        [[nodiscard]] void* allocate(uint32_t size, uint32_t alignment) override;
         void free(void* block, uint32_t size, uint32_t alignment) override;
     };
 } // namespace descript
