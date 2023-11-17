@@ -40,6 +40,11 @@ namespace {
 } // namespace
 
 namespace descript {
+    static constexpr dsTypeId BoolTypeId = dsType<bool>.typeId;
+    static constexpr dsTypeId Float32TypeId = dsType<float>.typeId;
+    static constexpr dsTypeId Int32TypeId = dsType<int32_t>.typeId;
+    static constexpr dsTypeId NilTypeId = dsType<decltype(nullptr)>.typeId;
+
     namespace {
         class ExpressionCompiler final : public dsExpressionCompiler
         {
@@ -160,7 +165,7 @@ namespace descript {
             {
                 AstType type = AstType::Invalid;
                 TokenIndex primaryTokenIndex = dsInvalidIndex;
-                dsTypeId valueType; // only filled in after lowering
+                dsTypeId valueType = dsInvalidTypeId; // only filled in after lowering
                 union Data {
                     int unused_ = 0;
                     union Constant {
@@ -687,16 +692,16 @@ namespace descript {
             case TokenType::KeyTrue:
             case TokenType::KeyFalse:
                 ast.type = AstType::Constant;
-                ast.valueType = dsType<bool>;
+                ast.valueType = BoolTypeId;
                 ast.data.constant = {.bool_ = tokens_[ast.primaryTokenIndex].type == TokenType::KeyTrue};
                 return {true, astIndex};
             case TokenType::KeyNil:
                 ast.type = AstType::Constant;
-                ast.valueType = dsTypeOf(nullptr);
+                ast.valueType = NilTypeId;
                 return {true, astIndex};
             case TokenType::LiteralInt:
                 ast.type = AstType::Constant;
-                ast.valueType = dsType<int32_t>;
+                ast.valueType = Int32TypeId;
                 ast.data.constant = {.int64_ = tokens_[ast.primaryTokenIndex].data.literalInt};
                 return {true, astIndex};
             default: DS_GUARD_OR(false, LowerResult(false, astIndex), "Unknown literal token type");
@@ -713,12 +718,12 @@ namespace descript {
             {
             case Operator::Negate:
                 ast.valueType = ast_[operandIndex].valueType;
-                if (ast.valueType != dsType<int32_t> && ast.valueType != dsType<float>)
+                if (ast.valueType != Int32TypeId && ast.valueType != Float32TypeId)
                     return {false, astIndex}; // FIXME: error on type
                 return {success, astIndex};
             case Operator::Not:
-                ast.valueType = dsType<bool>;
-                if (ast_[operandIndex].valueType != dsType<bool>)
+                ast.valueType = BoolTypeId;
+                if (ast_[operandIndex].valueType != BoolTypeId)
                     return {false, astIndex}; // FIXME: error on type
                 return {success, astIndex};
             default: DS_GUARD_OR(false, LowerResult(false, astIndex), "Unknown unary operator");
@@ -745,14 +750,14 @@ namespace descript {
             case Operator::Mul:
             case Operator::Div:
                 ast.valueType = ast_[leftIndex].valueType;
-                if (ast.valueType != dsType<float> && ast.valueType != dsType<int32_t>)
+                if (ast.valueType != Float32TypeId && ast.valueType != Int32TypeId)
                     return {false, astIndex}; // FIXME: error on type
                 return {success, astIndex};
             case Operator::And:
             case Operator::Or:
             case Operator::Xor:
-                ast.valueType = dsType<bool>;
-                if (ast.valueType != dsType<bool>)
+                ast.valueType = BoolTypeId;
+                if (ast.valueType != BoolTypeId)
                     return {false, astIndex}; // FIXME: error on type
                 return {success, astIndex};
             default: DS_GUARD_OR(false, LowerResult(false, astIndex), "Unknown unary operator");
@@ -841,32 +846,32 @@ namespace descript {
             // we can only further optimize constants
             if (ast_[astIndex].type == AstType::Constant)
             {
-                if (ast_[astIndex].data.unary.op == Operator::Negate && ast_[childIndex].valueType == dsType<int32_t>)
+                if (ast_[astIndex].data.unary.op == Operator::Negate && ast_[childIndex].valueType == Int32TypeId)
                 {
                     int64_t const value = ast_[childIndex].data.constant.int64_;
 
                     ast_[astIndex].type = AstType::Constant;
-                    ast_[astIndex].valueType = dsType<int32_t>;
+                    ast_[astIndex].valueType = Int32TypeId;
                     ast_[astIndex].data = {.constant = {.int64_ = -value}};
                     return astIndex;
                 }
 
-                if (ast_[astIndex].data.unary.op == Operator::Negate && ast_[childIndex].valueType == dsType<float>)
+                if (ast_[astIndex].data.unary.op == Operator::Negate && ast_[childIndex].valueType == Float32TypeId)
                 {
                     double const value = ast_[childIndex].data.constant.float64_;
 
                     ast_[astIndex].type = AstType::Constant;
-                    ast_[astIndex].valueType = dsType<float>;
+                    ast_[astIndex].valueType = Float32TypeId;
                     ast_[astIndex].data = {.constant = {.float64_ = -value}};
                     return astIndex;
                 }
 
-                if (ast_[astIndex].data.unary.op == Operator::Not && ast_[childIndex].valueType == dsType<bool>)
+                if (ast_[astIndex].data.unary.op == Operator::Not && ast_[childIndex].valueType == BoolTypeId)
                 {
                     bool const value = ast_[childIndex].data.constant.bool_;
 
                     ast_[astIndex].type = AstType::Constant;
-                    ast_[astIndex].valueType = dsType<bool>;
+                    ast_[astIndex].valueType = BoolTypeId;
                     ast_[astIndex].data = {.constant = {.bool_ = !value}};
                     return astIndex;
                 }
@@ -890,7 +895,7 @@ namespace descript {
                 Ast& ast = ast_[astIndex];
 
                 // arithmetic operations on integers (we don't handle division yet because we're integer-only
-                if (valueType == dsType<int32_t> && (op == Operator::Add || op == Operator::Sub || op == Operator::Mul))
+                if (valueType == Int32TypeId && (op == Operator::Add || op == Operator::Sub || op == Operator::Mul))
                 {
                     int64_t const left = ast_[leftChildIndex].data.constant.int64_;
                     int64_t const right = ast_[rightChildIndex].data.constant.int64_;
@@ -917,7 +922,7 @@ namespace descript {
                 }
 
                 // logical operations on booleans
-                if (valueType == dsType<bool> && (op == Operator::Or || op == Operator::And || op == Operator::Xor))
+                if (valueType == BoolTypeId && (op == Operator::Or || op == Operator::And || op == Operator::Xor))
                 {
                     bool const left = ast_[leftChildIndex].data.constant.bool_;
                     bool const right = ast_[rightChildIndex].data.constant.bool_;
@@ -974,19 +979,19 @@ namespace descript {
         switch (ast.type)
         {
         case AstType::Constant:
-            if (ast.valueType == dsType<bool>)
+            if (ast.valueType == BoolTypeId)
             {
                 builder.pushOp((uint8_t)(ast.data.constant.bool_ ? dsOpCode::PushTrue : dsOpCode::PushFalse));
                 return true;
             }
 
-            if (ast.valueType == dsTypeOf(nullptr))
+            if (ast.valueType == NilTypeId)
             {
                 builder.pushOp((uint8_t)dsOpCode::PushNil);
                 return true;
             }
 
-            if (ast.valueType == dsType<int32_t>)
+            if (ast.valueType == Int32TypeId)
             {
                 int64_t const value = ast.data.constant.int64_;
 
@@ -1056,7 +1061,7 @@ namespace descript {
                 return true;
             }
 
-            if (ast.valueType == dsType<float>)
+            if (ast.valueType == Float32TypeId)
             {
                 double const value = ast.data.constant.float64_;
 
@@ -1166,9 +1171,9 @@ namespace descript {
 
     dsTypeId ExpressionCompiler::resultType() const noexcept
     {
-        DS_GUARD_OR(status_ == Status::Lowered || status_ == Status::Optimized, dsType<void>);
+        DS_GUARD_OR(status_ == Status::Lowered || status_ == Status::Optimized, dsType<void>.typeId);
         if (astRoot_ == dsInvalidIndex)
-            return dsType<void>;
+            return dsType<void>.typeId;
         return ast_[astRoot_].valueType;
     }
 
@@ -1182,13 +1187,13 @@ namespace descript {
             return false;
 
         Ast const& ast = ast_[astRoot_];
-        if (ast.valueType == dsTypeOf(nullptr))
+        if (ast.valueType == dsTypeOf(nullptr).typeId)
             return out_value.accept(nullptr);
-        if (ast.valueType == dsType<bool>)
+        if (ast.valueType == dsType<bool>.typeId)
             return out_value.accept(ast_[astRoot_].data.constant.bool_);
-        if (ast.valueType == dsType<int32_t>)
+        if (ast.valueType == dsType<int32_t>.typeId)
             return out_value.accept(static_cast<int32_t>(ast_[astRoot_].data.constant.int64_));
-        if (ast.valueType == dsType<float>)
+        if (ast.valueType == dsType<float>.typeId)
             return out_value.accept(static_cast<float>(ast_[astRoot_].data.constant.float64_));
         DS_GUARD_OR(false, false, "Unrecognized literal data type");
     }

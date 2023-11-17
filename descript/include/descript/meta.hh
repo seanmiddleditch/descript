@@ -14,7 +14,7 @@ namespace descript {
     struct dsTypeMeta final
     {
         char const* name = nullptr;
-        uint32_t typeId = 0;
+        dsTypeId typeId = dsInvalidTypeId;
         uint32_t size = 0;
         uint32_t align = 0;
         dsTypeOpEquality opEquality = nullptr;
@@ -71,7 +71,7 @@ namespace descript {
             static constexpr bool value = true;
         };
 
-        consteval uint32_t dsHashTypeName(char const* name) noexcept
+        consteval dsTypeId dsHashTypeName(char const* name) noexcept
         {
             constexpr uint32_t prime = 0x0100'0193u;
 
@@ -82,7 +82,7 @@ namespace descript {
                 hash ^= value;
                 hash *= prime;
             }
-            return hash;
+            return dsTypeId{hash};
         }
 
         template <typename T>
@@ -104,10 +104,10 @@ namespace descript {
         {
             static constexpr dsTypeMeta meta{
                 .name = "void",
-                .typeId = 0,
+                .typeId = dsInvalidTypeId,
                 .size = 0,
                 .align = 0,
-                .opEquality = [](void const*, void const*) noexcept { return true; },
+                .opEquality = nullptr,
                 .opCopyTo = [](void*, void const*) noexcept {},
             };
         };
@@ -116,51 +116,11 @@ namespace descript {
     template <typename T>
     constexpr bool dsIsValue = detail_::dsIsValueHelper<T>::value;
 
-    class dsTypeId final
-    {
-    public:
-        constexpr dsTypeId() noexcept = default;
-        constexpr explicit dsTypeId(dsTypeMeta const& meta) noexcept : meta_(&meta) {}
-
-        constexpr explicit operator bool() const noexcept { return meta_->typeId != 0; }
-
-        constexpr [[nodiscard]] uint32_t id() const noexcept { return meta_->typeId; }
-        constexpr [[nodiscard]] dsTypeMeta const& meta() const noexcept { return *meta_; }
-
-        constexpr [[nodiscard]] bool operator==(dsTypeId rhs) const noexcept;
-        constexpr [[nodiscard]] bool operator==(dsTypeMeta const& rhs) const noexcept;
-        constexpr [[nodiscard]] std::strong_ordering operator<=>(dsTypeId rhs) const noexcept;
-
-    private:
-        dsTypeMeta const* meta_ = &detail_::dsTypeMetaHolder<void>::meta;
-    };
+    template <typename T>
+    requires dsIsValue<T>
+    constexpr dsTypeMeta const& dsType = detail_::dsTypeMetaHolder<T>::meta;
 
     template <typename T>
     requires dsIsValue<T>
-    constexpr dsTypeId dsType = detail_::dsTypeMetaHolder<T>::meta;
-
-    template <typename T>
-    requires dsIsValue<T>
-    constexpr [[nodiscard]] dsTypeId dsTypeOf(T const&) noexcept { return dsType<T>; }
-
-    constexpr bool dsTypeId::operator==(dsTypeId rhs) const noexcept
-    {
-        if (meta_ == rhs.meta_)
-            return true;
-        return meta_->typeId == rhs.meta_->typeId;
-    }
-
-    constexpr bool dsTypeId::operator==(dsTypeMeta const& rhs) const noexcept
-    {
-        if (meta_ == &rhs)
-            return true;
-        return meta_->typeId == rhs.typeId;
-    }
-
-    constexpr std::strong_ordering dsTypeId::operator<=>(dsTypeId rhs) const noexcept
-    {
-        if (meta_ == rhs.meta_)
-            return std::strong_ordering::equal;
-        return meta_->typeId <=> rhs.meta_->typeId;
-    }
+    constexpr [[nodiscard]] dsTypeMeta const& dsTypeOf(T const&) noexcept { return dsType<T>; }
 } // namespace descript

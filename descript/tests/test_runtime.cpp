@@ -5,6 +5,7 @@
 #include "descript/alloc.hh"
 #include "descript/assembly.hh"
 #include "descript/context.hh"
+#include "descript/database.hh"
 #include "descript/evaluate.hh"
 #include "descript/graph_compiler.hh"
 #include "descript/node.hh"
@@ -162,9 +163,9 @@ namespace {
     };
 
     static constexpr dsFunctionCompileMeta functions[] = {
-        {.name = "series", .functionId = dsFunctionId{0}, .returnType = dsType<int32_t>},
-        {.name = "readFlag", .functionId = dsFunctionId{1}, .returnType = dsType<bool>},
-        {.name = "readFlagNum", .functionId = dsFunctionId{2}, .returnType = dsType<int32_t>},
+        {.name = "series", .functionId = dsFunctionId{0}, .returnType = dsType<int32_t>.typeId},
+        {.name = "readFlag", .functionId = dsFunctionId{1}, .returnType = dsType<bool>.typeId},
+        {.name = "readFlagNum", .functionId = dsFunctionId{2}, .returnType = dsType<int32_t>.typeId},
     };
 
     class TestCompilerHost final : public dsGraphCompilerHost
@@ -207,7 +208,10 @@ namespace {
     class TestRuntimeHost final : public dsRuntimeHost
     {
     public:
-        TestRuntimeHost(dsAllocator& alloc) noexcept : allocator_(alloc), nodes_(alloc), functions_(alloc) {}
+        TestRuntimeHost(dsAllocator& alloc, dsTypeDatabase& database) noexcept
+            : allocator_(alloc), database_(database), nodes_(alloc), functions_(alloc)
+        {
+        }
 
         void registerNode(dsNodeTypeId typeId, dsNodeFunction function, uint32_t userSize, uint32_t userAlign);
         void registerFunction(dsFunctionId functionId, dsFunction function, void* userData = nullptr);
@@ -220,11 +224,13 @@ namespace {
 
         bool lookupNode(dsNodeTypeId, dsNodeRuntimeMeta& out_meta) const noexcept override;
         bool lookupFunction(dsFunctionId, dsFunctionRuntimeMeta& out_meta) const noexcept override;
+        bool lookupType(dsTypeId typeId, dsTypeMeta const*& out_meta) const noexcept override;
 
         dsAllocator& allocator() noexcept { return allocator_; }
 
     private:
         dsAllocator& allocator_;
+        dsTypeDatabase& database_;
         dsArray<dsNodeRuntimeMeta> nodes_;
         dsArray<dsFunctionRuntimeMeta> functions_;
     };
@@ -265,6 +271,17 @@ namespace {
         return false;
     }
 
+    bool TestRuntimeHost::lookupType(dsTypeId typeId, dsTypeMeta const*& out_meta) const noexcept
+    {
+        dsTypeMeta const* const meta = database_.getMeta(typeId);
+        if (meta != nullptr)
+        {
+            out_meta = meta;
+            return true;
+        }
+        return false;
+    }
+
     static void series(dsFunctionContext& ctx, void* userData)
     {
         int32_t result = 1;
@@ -292,7 +309,9 @@ TEST_CASE("Graph Compiler", "[runtime]")
 
     test::LeakTestAllocator alloc;
 
-    TestRuntimeHost runtimeHost(alloc);
+    dsTypeDatabase* database = dsCreateTypeDatabase(alloc);
+
+    TestRuntimeHost runtimeHost(alloc, *database);
 
     runtimeHost.registerNode(entryNodeTypeId, nullptr, 0, alignof(void*));
     runtimeHost.registerNode<ConditionState>();
@@ -319,10 +338,10 @@ TEST_CASE("Graph Compiler", "[runtime]")
     constexpr dsNodeId setResultNodeId{1790};
     constexpr dsNodeId setIncrementNodeId{2000};
 
-    compiler->addVariable(dsType<int32_t>, "Scale");
-    compiler->addVariable(dsType<int32_t>, "Count");
-    compiler->addVariable(dsType<int32_t>, "Result");
-    compiler->addVariable(dsType<int32_t>, "Increment");
+    compiler->addVariable(dsType<int32_t>.typeId, "Scale");
+    compiler->addVariable(dsType<int32_t>.typeId, "Count");
+    compiler->addVariable(dsType<int32_t>.typeId, "Result");
+    compiler->addVariable(dsType<int32_t>.typeId, "Increment");
 
     compiler->beginNode(entryNodeId, entryNodeTypeId);
     {
@@ -334,11 +353,11 @@ TEST_CASE("Graph Compiler", "[runtime]")
         compiler->addInputPlug(dsBeginPlugIndex);
         compiler->addOutputPlug(dsDefaultOutputPlugIndex);
 
-        compiler->beginInputSlot(dsInputSlot(0), dsType<int32_t>);
+        compiler->beginInputSlot(dsInputSlot(0), dsType<int32_t>.typeId);
         {
             compiler->bindConstant(2);
         }
-        compiler->beginOutputSlot(dsOutputSlot(0), dsType<int32_t>);
+        compiler->beginOutputSlot(dsOutputSlot(0), dsType<int32_t>.typeId);
         {
             compiler->bindVariable("Scale");
         }
@@ -349,7 +368,7 @@ TEST_CASE("Graph Compiler", "[runtime]")
         compiler->addInputPlug(dsBeginPlugIndex);
         compiler->addOutputPlug(ConditionState::truePlug);
         compiler->addOutputPlug(ConditionState::falsePlug);
-        compiler->beginInputSlot(ConditionState::conditionSlot, dsType<bool>);
+        compiler->beginInputSlot(ConditionState::conditionSlot, dsType<bool>.typeId);
         {
             compiler->bindExpression("readFlag()");
         }
@@ -358,11 +377,11 @@ TEST_CASE("Graph Compiler", "[runtime]")
     compiler->beginNode(counterNodeId, CounterState::typeId);
     {
         compiler->addInputPlug(dsBeginPlugIndex);
-        compiler->beginOutputSlot(CounterState::counterSlot, dsType<int32_t>);
+        compiler->beginOutputSlot(CounterState::counterSlot, dsType<int32_t>.typeId);
         {
             compiler->bindVariable("Count");
         }
-        compiler->beginInputSlot(CounterState::incrementSlot, dsType<int32_t>);
+        compiler->beginInputSlot(CounterState::incrementSlot, dsType<int32_t>.typeId);
         {
             compiler->bindExpression("series(2, 1, 2) + readFlagNum()");
         }
@@ -389,11 +408,11 @@ TEST_CASE("Graph Compiler", "[runtime]")
     compiler->beginNode(setResultNodeId, SetState::typeId);
     {
         compiler->addInputPlug(dsBeginPlugIndex);
-        compiler->beginInputSlot(dsInputSlot(0), dsType<int32_t>);
+        compiler->beginInputSlot(dsInputSlot(0), dsType<int32_t>.typeId);
         {
             compiler->bindExpression("Count * Scale");
         }
-        compiler->beginOutputSlot(dsOutputSlot(0), dsType<int32_t>);
+        compiler->beginOutputSlot(dsOutputSlot(0), dsType<int32_t>.typeId);
         {
             compiler->bindVariable("Result");
         }
@@ -402,11 +421,11 @@ TEST_CASE("Graph Compiler", "[runtime]")
     compiler->beginNode(setIncrementNodeId, SetState::typeId);
     {
         compiler->addInputPlug(dsBeginPlugIndex);
-        compiler->beginInputSlot(dsInputSlot(0), dsType<int32_t>);
+        compiler->beginInputSlot(dsInputSlot(0), dsType<int32_t>.typeId);
         {
             compiler->bindExpression("Increment + 1");
         }
-        compiler->beginOutputSlot(dsOutputSlot(0), dsType<int32_t>);
+        compiler->beginOutputSlot(dsOutputSlot(0), dsType<int32_t>.typeId);
         {
             compiler->bindVariable("Increment");
         }
@@ -505,4 +524,5 @@ TEST_CASE("Graph Compiler", "[runtime]")
     CHECK_FALSE(canaryValue);
 
     dsDestroyRuntime(runtime);
+    dsDestroyTypeDatabase(database);
 }

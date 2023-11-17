@@ -44,8 +44,8 @@ namespace descript::test::expression {
             NotVariableOnly,
             TypeFailed,
         } code = Code::Success;
-        dsTypeId expected;
-        dsTypeId actual;
+        dsTypeId expected = dsInvalidTypeId;
+        dsTypeId actual = dsInvalidTypeId;
 
         CompileResult(Code code, dsTypeId expected) noexcept : code(code), expected(expected) {}
         CompileResult(Code code, dsTypeId expected, dsTypeId actual) noexcept : code(code), expected(expected), actual(actual) {}
@@ -154,16 +154,16 @@ namespace descript::test::expression {
 
     std::ostream& operator<<(std::ostream& os, dsValueStorage const& value)
     {
-        if (value.type() == dsType<int32_t>)
+        if (value.type() == dsType<int32_t>.typeId)
             return os << value.type() << '(' << value.as<int32_t>() << ')';
-        if (value.type() == dsType<float>)
+        if (value.type() == dsType<float>.typeId)
             return os << value.type() << '(' << value.as<float>() << ')';
-        if (value.type() == dsType<bool>)
+        if (value.type() == dsType<bool>.typeId)
             return os << (value.as<bool>() ? "true" : "false");
         return os << value.type();
     }
 
-    std::ostream& operator<<(std::ostream& os, dsTypeId type) { return os << type.meta().name; }
+    std::ostream& operator<<(std::ostream& os, dsTypeId type) { return os << type.value(); }
 
     CompileResult ExpressionTester::compile(char const* expression, dsTypeId expectedType)
     {

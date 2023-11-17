@@ -13,9 +13,10 @@ namespace descript {
         public:
             explicit TypeDatabase(dsAllocator& alloc) noexcept : allocator_(alloc), types_(alloc) {}
 
-            void registerType(dsTypeId typeId) override;
+            void registerType(dsTypeMeta const& meta) override;
 
             dsTypeId lookupType(char const* name, char const* nameEnd = nullptr) const noexcept override;
+            dsTypeMeta const* getMeta(dsTypeId typeId) const noexcept override;
 
             dsAllocator& allocator() noexcept { return allocator_; }
 
@@ -46,14 +47,24 @@ namespace descript {
         }
     }
 
-    void TypeDatabase::registerType(dsTypeId typeId) { types_.pushBack(&typeId.meta()); }
+    void TypeDatabase::registerType(dsTypeMeta const& meta) { types_.pushBack(&meta); }
 
     dsTypeId TypeDatabase::lookupType(char const* name, char const* nameEnd) const noexcept
     {
-        DS_GUARD_OR(name != nullptr, dsTypeId());
+        DS_GUARD_OR(name != nullptr, dsTypeId{dsType<void>.typeId});
+
         for (const dsTypeMeta* meta : types_)
             if (dsStrEqual(meta->name, name, nameEnd))
-                return dsTypeId(*meta);
-        return dsTypeId{};
+                return dsTypeId(meta->typeId);
+
+        return dsTypeId{dsType<void>.typeId};
+    }
+
+    dsTypeMeta const* TypeDatabase::getMeta(dsTypeId typeId) const noexcept
+    {
+        for (const dsTypeMeta* meta : types_)
+            if (meta->typeId == typeId)
+                return meta;
+        return nullptr;
     }
 } // namespace descript

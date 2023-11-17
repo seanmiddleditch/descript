@@ -9,17 +9,17 @@
 namespace descript {
     bool dsValueRef::operator==(dsValueRef const& right) const noexcept
     {
-        if (type_ == right.type_)
-            return type_.meta().opEquality != nullptr && type_.meta().opEquality(pointer_, right.pointer_);
+        if (meta_->typeId == right.meta_->typeId)
+            return meta_->opEquality != nullptr && meta_->opEquality(pointer_, right.pointer_);
         return false;
     }
 
-    bool dsValueOut::accept(dsTypeId type, void const* pointer)
+    bool dsValueOut::accept(dsTypeMeta const& typeMeta, void const* pointer)
     {
         DS_GUARD_OR(sink_ != nullptr, false);
 
         if (sink_ != nullptr)
-            return sink_(type, pointer, userData_);
+            return sink_(typeMeta, pointer, userData_);
 
         return false;
     }

@@ -773,14 +773,14 @@ namespace descript {
         for (auto&& [index, value] : dsEnumerate(constants_))
         {
             dsAssemblyConstant& outConst = header->constants[dsAssemblyConstantIndex{index}];
-            outConst.typeId = value.type().id();
+            outConst.typeId = value.type().value();
             outConst.serialized = 0;
 
-            if (value.type() == dsType<int32_t>)
+            if (value.type() == dsType<int32_t>.typeId)
                 outConst.serialized = dsBitCast<uint32_t>(value.as<int32_t>());
-            else if (value.type() == dsType<float>)
+            else if (value.type() == dsType<float>.typeId)
                 outConst.serialized = dsBitCast<uint32_t>(value.as<float>());
-            else if (value.type() != dsType<decltype(nullptr)>)
+            else if (value.type() != dsType<decltype(nullptr)>.typeId)
                 DS_GUARD_OR(false, false, "Unsupported value type");
         }
 

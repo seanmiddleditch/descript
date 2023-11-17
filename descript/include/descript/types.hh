@@ -9,7 +9,6 @@
 namespace descript {
     class dsFunctionContext;
     class dsNodeContext;
-    class dsTypeId;
 
     // user-defined identifiers
     DS_DEFINE_KEY(dsNodeTypeId, uint64_t);
@@ -26,12 +25,14 @@ namespace descript {
     DS_DEFINE_KEY(dsEmitterId, uint64_t);
     DS_DEFINE_KEY(dsInstanceId, uint64_t);
     DS_DEFINE_KEY(dsNodeIndex, uint32_t);
+    DS_DEFINE_KEY(dsTypeId, uint32_t);
 
     // invalid ids
     static constexpr dsEmitterId dsInvalidEmitterId{~uint64_t{0}};
     static constexpr dsNodeTypeId dsInvalidNodeTypeId{~uint64_t{0}};
     static constexpr dsInstanceId dsInvalidInstanceId{~uint64_t{0}};
     static constexpr dsFunctionId dsInvalidFunctionId{~uint64_t{0}};
+    static constexpr dsTypeId dsInvalidTypeId{~uint32_t{0}};
 
     // special constants for plug indices
     static constexpr dsInputPlugIndex dsBeginPlugIndex{254};

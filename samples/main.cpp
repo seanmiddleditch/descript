@@ -242,7 +242,7 @@ namespace sample {
         for (auto const& varPtr : graph_->variables)
         {
             if (!varPtr->name.empty())
-                compiler->addVariable(dsType<int32_t>, varPtr->name.c_str());
+                compiler->addVariable(dsType<int32_t>.typeId, varPtr->name.c_str());
         }
 
         for (auto const& nodePtr : graph_->nodes)
@@ -262,7 +262,7 @@ namespace sample {
 
             for (auto const& slotPtr : nodePtr->slots)
             {
-                compiler->beginInputSlot(dsInputSlot(slotPtr->schema->index), dsType<int32_t>);
+                compiler->beginInputSlot(dsInputSlot(slotPtr->schema->index), dsType<int32_t>.typeId);
                 {
                     compiler->bindExpression(slotPtr->expression.c_str());
                 }

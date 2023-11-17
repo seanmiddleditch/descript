@@ -10,6 +10,7 @@ namespace descript {
     class dsInstance;
     struct dsAssembly;
     class dsChangeBus;
+    class dsTypeMeta;
     class dsValueOut;
     class dsValueRef;
 
@@ -33,6 +34,7 @@ namespace descript {
     public:
         virtual bool lookupNode(dsNodeTypeId, dsNodeRuntimeMeta& out_meta) const noexcept = 0;
         virtual bool lookupFunction(dsFunctionId, dsFunctionRuntimeMeta& out_meta) const noexcept = 0;
+        virtual bool lookupType(dsTypeId typeId, dsTypeMeta const*& out_meta) const noexcept = 0;
 
     protected:
         ~dsRuntimeHost() = default;

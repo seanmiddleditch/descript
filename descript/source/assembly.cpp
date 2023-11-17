@@ -189,9 +189,9 @@ namespace descript {
             dsAssemblyConstant const& serialized = header.constants[constantIndex];
 
             dsValueStorage& deserialized = assembly->constants[constantIndex];
-            if (serialized.typeId == dsType<int32_t>.id())
+            if (serialized.typeId == dsType<int32_t>.typeId.value())
                 deserialized = dsBitCast<int32_t>(static_cast<uint32_t>(serialized.serialized));
-            else if (serialized.typeId == dsType<float>.id())
+            else if (serialized.typeId == dsType<float>.typeId.value())
                 deserialized = dsBitCast<float>(static_cast<uint32_t>(serialized.serialized));
         }
 

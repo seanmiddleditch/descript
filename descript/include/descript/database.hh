@@ -7,12 +7,15 @@
 #include "descript/types.hh"
 
 namespace descript {
+    class dsTypeMeta;
+
     class dsTypeDatabase
     {
     public:
-        virtual void registerType(dsTypeId typeId) = 0;
+        virtual void registerType(dsTypeMeta const& meta) = 0;
 
         virtual dsTypeId lookupType(char const* name, char const* nameEnd = nullptr) const noexcept = 0;
+        virtual dsTypeMeta const* getMeta(dsTypeId typeId) const noexcept = 0;
 
     protected:
         ~dsTypeDatabase() = default;

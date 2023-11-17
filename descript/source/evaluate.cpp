@@ -127,11 +127,11 @@ namespace descript {
         template <typename Op>
         constexpr bool apply(dsValueOut out_result, dsValueStorage const& val) noexcept
         {
-            if (val.type() == dsType<int32_t>)
+            if (val.type() == dsType<int32_t>.typeId)
                 return applyTyped<Op>(out_result, val.as<int32_t>());
-            if (val.type() == dsType<float>)
+            if (val.type() == dsType<float>.typeId)
                 return applyTyped<Op>(out_result, val.as<float>());
-            if (val.type() == dsType<bool>)
+            if (val.type() == dsType<bool>.typeId)
                 return applyTyped<Op>(out_result, val.as<bool>());
             return false;
         }
@@ -152,11 +152,11 @@ namespace descript {
             if (left.type() != right.type())
                 return false;
 
-            if (left.type() == dsType<int32_t>)
+            if (left.type() == dsType<int32_t>.typeId)
                 return applyTyped<Op>(out_result, left.as<int32_t>(), right.as<int32_t>());
-            if (left.type() == dsType<float>)
+            if (left.type() == dsType<float>.typeId)
                 return applyTyped<Op>(out_result, left.as<float>(), right.as<float>());
-            if (left.type() == dsType<bool>)
+            if (left.type() == dsType<bool>.typeId)
                 return applyTyped<Op>(out_result, left.as<bool>(), right.as<bool>());
             return false;
         }

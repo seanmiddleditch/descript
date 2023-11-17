@@ -37,14 +37,14 @@ namespace descript {
 
     struct dsVariableCompileMeta
     {
-        dsTypeId type;
+        dsTypeId type = dsInvalidTypeId;
     };
 
     struct dsFunctionSignature
     {
         dsTypeId const* paramTypes = nullptr;
         dsFunctionSignature* next = nullptr;
-        dsTypeId returnType;
+        dsTypeId returnType = dsInvalidTypeId;
         uint32_t paramCount = 0;
     };
 
@@ -52,6 +52,6 @@ namespace descript {
     {
         char const* name = nullptr;
         dsFunctionId functionId = dsInvalidFunctionId;
-        dsTypeId returnType;
+        dsTypeId returnType = dsInvalidTypeId;
     };
 }

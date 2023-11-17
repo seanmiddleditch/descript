@@ -13,48 +13,46 @@ namespace descript {
 
         dsValueStorage(dsValueRef const& value) noexcept
         {
-            type_ = value.type();
-            type_.meta().opCopyTo(&storage_, value.pointer());
+            meta_ = &value.meta();
+            meta_->opCopyTo(&storage_, value.pointer());
         }
 
         template <typename T>
         requires dsIsValue<T>
         /*implicit*/ dsValueStorage(T const& value)
-        noexcept : type_(dsType<T>) { new (&storage_) T(value); }
+        noexcept : meta_(&dsType<T>) { new (&storage_) T(value); }
 
-        constexpr explicit operator bool() const noexcept { return (bool)type_; }
-
-        constexpr [[nodiscard]] dsTypeId type() const noexcept { return type_; }
+        constexpr [[nodiscard]] dsTypeId type() const noexcept { return dsTypeId{meta_->typeId}; }
 
         [[nodiscard]] void const* pointer() const noexcept { return &storage_; }
 
         template <typename T>
         requires dsIsValue<T>
-        constexpr [[nodiscard]] bool is() const noexcept { return type_ == dsType<T>; }
+        constexpr [[nodiscard]] bool is() const noexcept { return meta_->typeId == dsType<T>.typeId; }
 
         template <typename T>
         requires dsIsValue<T>
         constexpr T as() const noexcept { return *static_cast<T const*>(static_cast<void const*>(&storage_)); }
 
-        [[nodiscard]] dsValueRef ref() const noexcept { return dsValueRef(type_, &storage_); }
+        [[nodiscard]] dsValueRef ref() const noexcept { return dsValueRef(*meta_, &storage_); }
 
         [[nodiscard]] dsValueOut out() noexcept { return dsValueOut(&sink, this); }
 
         constexpr [[nodiscard]] bool operator==(dsValueStorage const& right) const noexcept
         {
-            return type_ == right.type_ && type_.meta().opEquality != nullptr && type_.meta().opEquality(&storage_, &right.storage_);
+            return meta_->typeId == right.meta_->typeId && meta_->opEquality != nullptr && meta_->opEquality(&storage_, &right.storage_);
         }
 
     private:
-        static bool sink(dsTypeId type, void const* pointer, void* userData)
+        static bool sink(dsTypeMeta const& typeMeta, void const* pointer, void* userData)
         {
             dsValueStorage& self = *static_cast<dsValueStorage*>(userData);
-            self.type_ = type;
-            type.meta().opCopyTo(&self.storage_, pointer);
+            self.meta_ = &typeMeta;
+            self.meta_->opCopyTo(&self.storage_, pointer);
             return true;
         }
 
-        dsTypeId type_;
+        dsTypeMeta const* meta_ = &dsType<void>;
         alignas(void*) char storage_[16];
 
         friend class dsValueRef;

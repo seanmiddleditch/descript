@@ -24,7 +24,7 @@ TEST_CASE("Virtual Machine", "[vm]")
 
     static constexpr Function functions[] = {
         Function{.name = "Add",
-            .returnType = dsType<int32_t>,
+            .returnType = dsType<int32_t>.typeId,
             .function =
                 [](dsFunctionContext& ctx, void* userData) {
                     int32_t result = 0;
@@ -100,7 +100,7 @@ TEST_CASE("Virtual Machine", "[vm]")
         CHECK(tester.run("Add(Seven, 0, Eleven)", 18));
     }
 
-    SECTION("Type errors") { CHECK_FALSE(tester.compile("1 + true", {})); }
+    SECTION("Type errors") { CHECK_FALSE(tester.compile("1 + true", dsType<void>.typeId)); }
 
     SECTION("Constant optimization")
     {
@@ -112,7 +112,7 @@ TEST_CASE("Virtual Machine", "[vm]")
 
     SECTION("Only variable")
     {
-        CHECK(tester.variable("Seven", dsType<int32_t>));
-        CHECK_FALSE(tester.variable("7", dsType<int32_t>));
+        CHECK(tester.variable("Seven", dsType<int32_t>.typeId));
+        CHECK_FALSE(tester.variable("7", dsType<int32_t>.typeId));
     }
 }
